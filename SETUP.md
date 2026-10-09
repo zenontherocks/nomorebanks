@@ -74,9 +74,11 @@ database:
    - **Deploy command:** `npx wrangler deploy` (usually pre-filled)
    - **Root directory:** leave as `/`
 4. Click **Save and Deploy**. The first build takes a minute or two.
-5. Open the Worker's **Settings → Build → Branch control** and untick **Enable Preview
-   Builds**. This site isn't set up for Cloudflare's preview builds, so builds of other
-   branches would just fail and show a red ✗ on GitHub pull requests.
+5. Optional: open the Worker's **Settings → Build → Branch control** and untick **Enable
+   Preview Builds**. This site isn't set up for Cloudflare's preview builds, so builds of
+   other branches fail and show a red ✗ "Workers Builds" check on GitHub pull requests.
+   If you can't find the setting, it's safe to ignore: that check doesn't affect the live
+   site, which is only ever built from `main`.
 
 From now on, every change merged into `main` is published automatically.
 
