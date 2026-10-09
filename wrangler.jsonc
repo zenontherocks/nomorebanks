@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Must match the Worker/project name chosen in the Cloudflare dashboard.
+  "name": "nomorebanks",
+  "main": "src/index.tsx",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+
+  // CSS, admin JavaScript and vendored editor libraries. Requests that don't
+  // match a file here fall through to the Worker.
+  "assets": { "directory": "./public" },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nomorebanks-db",
+      // Paste the Database ID from the Cloudflare dashboard
+      // (Storage & Databases → D1 → nomorebanks-db). Local dev works without it.
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "IMAGES",
+      "bucket_name": "nomorebanks-images"
+    }
+  ]
+
+  // ADMIN_PASSWORD is a secret: set it in the dashboard under
+  // Workers & Pages → nomorebanks → Settings → Variables and Secrets,
+  // or in .dev.vars for local development.
+}

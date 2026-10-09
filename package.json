@@ -1,0 +1,32 @@
+{
+  "name": "nomorebanks",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Small modular-page website with a hidden admin console, running on Cloudflare Workers + D1 + R2.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "vendor": "node scripts/vendor.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zenontherocks/nomorebanks.git"
+  },
+  "dependencies": {
+    "hono": "^4.13.13"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.0",
+    "@cloudflare/workers-types": "^5.20261009.1",
+    "@playwright/test": "^1.64.0",
+    "quill": "^2.0.3",
+    "sortablejs": "^1.15.7",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.149.0"
+  }
+}
