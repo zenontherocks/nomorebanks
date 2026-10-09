@@ -14,9 +14,9 @@
     {
       "binding": "DB",
       "database_name": "nomorebanks-db",
-      // Paste the Database ID from the Cloudflare dashboard
-      // (Storage & Databases → D1 → nomorebanks-db). Local dev works without it.
-      "database_id": "00000000-0000-0000-0000-000000000000"
+      // From the Cloudflare dashboard: Storage & Databases → D1 → nomorebanks-db.
+      // Local dev and tests use a local copy and never touch this database.
+      "database_id": "d3b9d805-5008-4fd7-85f4-387bc5f70077"
     }
   ],
 

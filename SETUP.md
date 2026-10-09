@@ -21,7 +21,7 @@ The names matter: they must match `wrangler.jsonc` in this repository.
 2. In the left sidebar open **Storage & Databases → D1 SQL Database**.
 3. Click **Create**, name it `nomorebanks-db`, leave the location on automatic, and click **Create**.
 4. On the database's page, copy its **Database ID** (a long code like `1a2b3c4d-…`).
-   You'll paste it into the code in step 4. It isn't a secret.
+   It goes into `wrangler.jsonc` in step 4. It isn't a secret.
 
 The site creates its own tables the first time it runs — there's nothing else to do here.
 
@@ -47,15 +47,16 @@ whatever is on `main`, so:
 3. Go to **Settings → General → Default branch**, click the switch icon, choose `main`, and
    confirm.
 
-## 4. GitHub: paste in the database ID
+## 4. GitHub: check the database ID
+
+**Already done** for the database `nomorebanks-db` with ID
+`d3b9d805-5008-4fd7-85f4-387bc5f70077`. You only need this step if you ever recreate the
+database:
 
 1. On the `main` branch, open the file `wrangler.jsonc` and click the pencil icon (**Edit**).
-2. Find the line
-   `"database_id": "00000000-0000-0000-0000-000000000000"`
-   and replace the zeros with the Database ID you copied in step 1 (keep the quotes).
+2. Find the `"database_id": "…"` line and replace the value with the new Database ID
+   (keep the quotes).
 3. Click **Commit changes…** and commit directly to `main`.
-
-(Or send the ID to Claude and have it make this change.)
 
 ## 5. Cloudflare: connect the repository
 
@@ -103,7 +104,7 @@ Domains & Routes → Add → Custom domain** and enter it (e.g. `www.example.com
 
 | Symptom | Fix |
 |---|---|
-| Build fails with a D1/database error | Check step 4: the `database_id` in `wrangler.jsonc` must match the D1 database's ID. |
+| Build fails with a D1/database error | The `database_id` in `wrangler.jsonc` must match the D1 database's ID (step 4). |
 | Build fails mentioning the bucket | Check step 2: the bucket must be named exactly `nomorebanks-images`. |
 | Admin page says the password isn't set up | Add the `ADMIN_PASSWORD` secret (step 6), then reload. |
 | "Too many failed attempts" | Wait 15 minutes, then try again. |
