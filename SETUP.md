@@ -34,18 +34,18 @@ The site creates its own tables the first time it runs — there's nothing else 
    click **Create bucket**.
 4. Leave public access **off**. The website serves the images itself.
 
-## 3. GitHub: make `main` the default branch
+If you skip this step, the first deploy creates a bucket with this name for you. A bucket
+with any other name is simply unused and can be deleted (bucket → **Settings** → **Delete bucket**).
 
-The code lives on the branch `claude/charming-heisenberg-4ih0xw`. Cloudflare will publish
-whatever is on `main`, so:
+## 3. GitHub: `main` is what gets published
 
-1. Open the repository on <https://github.com/zenontherocks/nomorebanks>.
-2. If there's no `main` branch yet: click the branch dropdown (top left of the file list),
-   type `main`, and choose **Create branch main from claude/charming-heisenberg-4ih0xw**.
-   If `main` already exists, open a pull request from the `claude/…` branch into `main`
-   and merge it instead.
-3. Go to **Settings → General → Default branch**, click the switch icon, choose `main`, and
-   confirm.
+Cloudflare publishes whatever is on the `main` branch.
+
+- `main` is already the repository's default branch and holds the site's code, so there's
+  nothing to do here. (To check: **Settings → General → Default branch** should say `main`.)
+- When changes arrive on another branch (for example `claude/…`), GitHub shows a
+  **Compare & pull request** button. Open the pull request into `main` and click
+  **Merge pull request**: the site updates a minute or two later.
 
 ## 4. GitHub: check the database ID
 
@@ -61,7 +61,9 @@ database:
 ## 5. Cloudflare: connect the repository
 
 1. In the sidebar open **Workers & Pages** (or **Compute → Workers & Pages**), click
-   **Create**, and choose **Import a repository** (sometimes shown as **Connect to Git**).
+   **Create application**, then click **Get started** next to **Import a repository**.
+   Don't use the **Pages** option or **Connect to Git** — those create a Pages project,
+   which can't run this site.
 2. Click **Connect GitHub**. GitHub opens and asks to install the **Cloudflare Workers and
    Pages** app: choose **Only select repositories**, pick `nomorebanks`, and click
    **Install & Authorize**.
@@ -71,10 +73,10 @@ database:
    - **Build command:** leave empty
    - **Deploy command:** `npx wrangler deploy` (usually pre-filled)
    - **Root directory:** leave as `/`
-4. Click **Create and deploy** (or **Save and deploy**). The first build takes a minute or two.
-5. Recommended: in the Worker's **Settings → Build**, turn **off** builds for non-production
-   branches. Preview builds share the real database, so edits made there would change the
-   live site.
+4. Click **Save and Deploy**. The first build takes a minute or two.
+5. Open the Worker's **Settings → Build → Branch control** and untick **Enable Preview
+   Builds**. This site isn't set up for Cloudflare's preview builds, so builds of other
+   branches would just fail and show a red ✗ on GitHub pull requests.
 
 From now on, every change merged into `main` is published automatically.
 
@@ -84,16 +86,20 @@ From now on, every change merged into `main` is published automatically.
 2. Click **Add**, choose type **Secret**, name it `ADMIN_PASSWORD`, and enter a long password
    (a passphrase of four or more random words works well). Save/deploy.
 
-To change the password later, edit this secret the same way.
+To change the password later, edit this secret the same way. Changing it also logs out
+every existing admin session, so it's the fix if you think someone else has logged in.
 
 ## 7. Try it
 
-- **Public site:** `https://nomorebanks.<your-account-subdomain>.workers.dev` — the exact
-  address is shown on the Worker's overview page. It says "Coming soon" until you add a page.
+- **Public site:** your custom domain (see below), or
+  `https://nomorebanks.<your-account-subdomain>.workers.dev` if the workers.dev address is
+  enabled — the Worker's overview page lists its addresses. It says "Coming soon" until you
+  add a page.
 - **Admin console:** add `/admin` to the end of that address and log in with your password.
   It isn't linked from the site, so bookmark it.
 
-Five wrong passwords in a row lock that network out of the login for 15 minutes.
+Five wrong passwords in a row lock that network out of the login until 15 minutes after its
+last attempt.
 
 ## Optional: use your own domain
 
@@ -107,5 +113,5 @@ Domains & Routes → Add → Custom domain** and enter it (e.g. `www.example.com
 | Build fails with a D1/database error | The `database_id` in `wrangler.jsonc` must match the D1 database's ID (step 4). |
 | Build fails mentioning the bucket | Check step 2: the bucket must be named exactly `nomorebanks-images`. |
 | Admin page says the password isn't set up | Add the `ADMIN_PASSWORD` secret (step 6), then reload. |
-| "Too many failed attempts" | Wait 15 minutes, then try again. |
+| "Too many failed attempts" | Wait 15 minutes without trying, then log in again. |
 | Logs and errors | **Workers & Pages → nomorebanks → Observability** (or **Logs**). |

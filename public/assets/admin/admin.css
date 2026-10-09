@@ -47,13 +47,9 @@ code {
   color: var(--muted);
 }
 
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
+/* Headings are focused programmatically when a view opens; no ring needed. */
+h1[tabindex="-1"]:focus {
+  outline: none;
 }
 
 /* Top bar */

@@ -1,7 +1,21 @@
-import { env } from "cloudflare:test";
+import { createExecutionContext, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { cleanupOrphanImages } from "../src/images";
+import app from "../src/index";
 import { ORIGIN, PNG_BYTES, api, fetchWorker, freshIp, login, postLogin, textDelta } from "./helpers";
+
+/** Calls the app directly, so concurrent requests really overlap (the loopback fetch serializes them). */
+function callApp(request: Request, bindings: Cloudflare.Env = env) {
+  return app.fetch(request, bindings, createExecutionContext());
+}
+
+function loginRequest(password: string, ip: string) {
+  return new Request(`${ORIGIN}/admin/login`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", "cf-connecting-ip": ip, origin: ORIGIN },
+    body: new URLSearchParams({ password }),
+  });
+}
 
 async function createPage(cookie: string, body: Record<string, unknown>) {
   const res = await api(cookie, "/pages", { method: "POST", json: body });
@@ -74,6 +88,28 @@ describe("admin login", () => {
     expect(locked.status).toBe(429);
     // Other visitors are unaffected.
     expect((await postLogin("test-password")).status).toBe(303);
+  });
+
+  it("can't be bypassed by sending many guesses at once", async () => {
+    const ip = freshIp();
+    const guesses = Array.from({ length: 30 }, (_, i) => loginRequest(i === 29 ? "test-password" : `wrong-${i}`, ip));
+    const statuses = await Promise.all(guesses.map(async (request) => (await callApp(request)).status));
+    expect(statuses.filter((status) => status === 401 || status === 303).length).toBeLessThanOrEqual(5);
+    expect(statuses.filter((status) => status === 429).length).toBeGreaterThanOrEqual(25);
+  });
+
+  it("locks out a whole IPv6 /56, not just one address", async () => {
+    for (let i = 1; i <= 5; i++) expect((await postLogin("wrong", `2001:db8:77:1::${i}`)).status).toBe(401);
+    expect((await postLogin("test-password", "2001:db8:77:2::99")).status).toBe(429);
+    expect((await postLogin("test-password", "2001:db8:78::1")).status).toBe(303);
+  });
+
+  it("logs out existing sessions when the password changes", async () => {
+    const cookie = await login();
+    const request = () =>
+      new Request(`${ORIGIN}/api/pages`, { headers: { cookie, "x-requested-with": "nmb-admin" } });
+    expect((await callApp(request())).status).toBe(200);
+    expect((await callApp(request(), { ...env, ADMIN_PASSWORD: "a-new-password" })).status).toBe(401);
   });
 
   it("rejects cross-site login posts", async () => {

@@ -1,13 +1,13 @@
 import { Hono } from "hono";
 import {
-  clearFailedLogins,
+  clearLoginAttempts,
   clientIp,
   createSession,
   destroySession,
   hasValidSession,
-  lockedOutUntil,
   passwordMatches,
-  recordFailedLogin,
+  reserveLoginAttempt,
+  throttleKey,
 } from "../auth";
 import type { AppEnv } from "../env";
 import { renderHtml } from "../render";
@@ -32,8 +32,8 @@ adminRoutes.post("/login", async (c) => {
   const expected = c.env.ADMIN_PASSWORD;
   if (!expected) return renderHtml(c, <LoginView configured={false} />, 503);
 
-  const ip = clientIp(c);
-  if (await lockedOutUntil(c.env.DB, ip)) {
+  const key = throttleKey(clientIp(c));
+  if (!(await reserveLoginAttempt(c.env.DB, key))) {
     return renderHtml(
       c,
       <LoginView configured error="Too many failed attempts. Please wait 15 minutes and try again." />,
@@ -44,11 +44,10 @@ adminRoutes.post("/login", async (c) => {
   const form = await c.req.parseBody();
   const password = typeof form.password === "string" ? form.password : "";
   if (!(await passwordMatches(password, expected))) {
-    await recordFailedLogin(c.env.DB, ip);
     return renderHtml(c, <LoginView configured error="Incorrect password." />, 401);
   }
 
-  await clearFailedLogins(c.env.DB, ip);
+  await clearLoginAttempts(c.env.DB, key);
   await createSession(c);
   return c.redirect("/admin", 303);
 });

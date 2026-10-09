@@ -31,35 +31,66 @@ export function clientIp(c: Context): string {
   return c.req.header("cf-connecting-ip") ?? "unknown";
 }
 
-/** Returns the unix time the IP is locked out until, or 0 if it isn't. */
-export async function lockedOutUntil(db: D1Database, ip: string): Promise<number> {
-  const row = await db
-    .prepare("SELECT locked_until FROM login_attempts WHERE ip = ?")
-    .bind(ip)
-    .first<{ locked_until: number }>();
-  return row && row.locked_until > nowSeconds() ? row.locked_until : 0;
+/**
+ * The key login attempts are counted under. IPv6 clients usually control a
+ * whole block of addresses, so they're grouped by /56 prefix; otherwise an
+ * attacker could switch address every few guesses.
+ */
+export function throttleKey(ip: string): string {
+  if (!ip.includes(":")) return ip;
+  const [head, tail] = ip.split("%")[0].toLowerCase().split("::");
+  const headGroups = head ? head.split(":") : [];
+  const tailGroups = tail ? tail.split(":") : [];
+  const zeros = tail === undefined ? [] : Array(Math.max(0, 8 - headGroups.length - tailGroups.length)).fill("0");
+  const hex = [...headGroups, ...zeros, ...tailGroups]
+    .slice(0, 4)
+    .map((group) => group.padStart(4, "0"))
+    .join("");
+  return `${hex.slice(0, 14)}::/56`;
 }
 
-/** Counts a failed login; MAX_FAILURES within the window locks the IP out. */
-export async function recordFailedLogin(db: D1Database, ip: string): Promise<void> {
+/**
+ * Counts a login attempt *before* the password is checked, and reports whether
+ * the client may try. Doing the check and the count in one statement means a
+ * burst of simultaneous guesses can't all slip in before the lockout applies.
+ * After MAX_FAILURES attempts the key is locked for LOCKOUT_SECONDS, measured
+ * from its most recent attempt.
+ */
+export async function reserveLoginAttempt(db: D1Database, key: string): Promise<boolean> {
   const now = nowSeconds();
-  await db.batch([
-    db
-      .prepare(
-        `INSERT INTO login_attempts (ip, failures, locked_until, updated_at) VALUES (?1, 1, 0, ?2)
-         ON CONFLICT (ip) DO UPDATE SET
-           failures = CASE WHEN updated_at < ?2 - ?3 THEN 1 ELSE failures + 1 END,
-           updated_at = ?2`,
-      )
-      .bind(ip, now, LOCKOUT_SECONDS),
-    db
-      .prepare("UPDATE login_attempts SET failures = 0, locked_until = ?2 + ?3 WHERE ip = ?1 AND failures >= ?4")
-      .bind(ip, now, LOCKOUT_SECONDS, MAX_FAILURES),
-  ]);
+  const row = await db
+    .prepare(
+      `INSERT INTO login_attempts (ip, failures, locked_until, updated_at) VALUES (?1, 1, 0, ?2)
+       ON CONFLICT (ip) DO UPDATE SET
+         failures = CASE
+           WHEN locked_until > ?2 THEN failures
+           WHEN updated_at < ?2 - ?3 THEN 1
+           ELSE failures + 1
+         END,
+         locked_until = CASE
+           WHEN locked_until > ?2 THEN locked_until
+           WHEN (CASE WHEN updated_at < ?2 - ?3 THEN 1 ELSE failures + 1 END) > ?4 THEN ?2 + ?3
+           ELSE 0
+         END,
+         updated_at = ?2
+       RETURNING locked_until`,
+    )
+    .bind(key, now, LOCKOUT_SECONDS, MAX_FAILURES)
+    .first<{ locked_until: number }>();
+  return !row || row.locked_until <= now;
 }
 
-export async function clearFailedLogins(db: D1Database, ip: string): Promise<void> {
-  await db.prepare("DELETE FROM login_attempts WHERE ip = ?").bind(ip).run();
+export async function clearLoginAttempts(db: D1Database, key: string): Promise<void> {
+  await db.prepare("DELETE FROM login_attempts WHERE ip = ?").bind(key).run();
+}
+
+/**
+ * Sessions are stored as a hash of the token *and* the current password, so
+ * changing ADMIN_PASSWORD logs out every existing session. Only hashes are
+ * stored, so a database leak can't be replayed as a login.
+ */
+function sessionHash(token: string, password: string): Promise<string> {
+  return sha256Hex(`${token}\0${password}`);
 }
 
 export async function createSession(c: Context<AppEnv>): Promise<void> {
@@ -69,11 +100,10 @@ export async function createSession(c: Context<AppEnv>): Promise<void> {
     .replaceAll("/", "_")
     .replace(/=+$/, "");
   const now = nowSeconds();
-  // Only a hash of the token is stored, so a database leak can't be replayed as a login.
   await c.env.DB.batch([
     c.env.DB.prepare("DELETE FROM sessions WHERE expires_at <= ?").bind(now),
     c.env.DB.prepare("INSERT INTO sessions (token_hash, expires_at) VALUES (?, ?)").bind(
-      await sha256Hex(token),
+      await sessionHash(token, c.env.ADMIN_PASSWORD ?? ""),
       now + SESSION_TTL_SECONDS,
     ),
   ]);
@@ -88,9 +118,10 @@ export async function createSession(c: Context<AppEnv>): Promise<void> {
 
 export async function hasValidSession(c: Context<AppEnv>): Promise<boolean> {
   const token = getCookie(c, SESSION_COOKIE);
-  if (!token) return false;
+  const password = c.env.ADMIN_PASSWORD;
+  if (!token || !password) return false;
   const row = await c.env.DB.prepare("SELECT 1 FROM sessions WHERE token_hash = ? AND expires_at > ?")
-    .bind(await sha256Hex(token), nowSeconds())
+    .bind(await sessionHash(token, password), nowSeconds())
     .first();
   return row !== null;
 }
@@ -98,7 +129,9 @@ export async function hasValidSession(c: Context<AppEnv>): Promise<boolean> {
 export async function destroySession(c: Context<AppEnv>): Promise<void> {
   const token = getCookie(c, SESSION_COOKIE);
   if (token) {
-    await c.env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(await sha256Hex(token)).run();
+    await c.env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?")
+      .bind(await sessionHash(token, c.env.ADMIN_PASSWORD ?? ""))
+      .run();
   }
   deleteCookie(c, SESSION_COOKIE, { path: "/" });
 }

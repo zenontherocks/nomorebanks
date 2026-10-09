@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { throttleKey } from "../src/auth";
 import { sniffImageType } from "../src/images";
 import { ValidationError, parsePageInput, slugify } from "../src/validate";
 import { PNG_BYTES } from "./helpers";
@@ -39,6 +40,9 @@ describe("parsePageInput", () => {
     ];
     expect(() => parsePageInput({ ...base, modules })).toThrow("Text module #2 is empty.");
     expect(() => parsePageInput({ ...base, modules: [{ type: "video", data: {} }] })).toThrow(ValidationError);
+    expect(() => parsePageInput({ ...base, modules: [{ type: "constructor", data: {} }] })).toThrow(
+      "Module #1 has an unknown type.",
+    );
     expect(() => parsePageInput({ ...base, modules: [{ type: "image", data: { key: "" } }] })).toThrow(
       "Image module #1 has no image uploaded yet.",
     );
@@ -55,5 +59,14 @@ describe("sniffImageType", () => {
     expect(sniffImageType(new TextEncoder().encode("GIF89a"))?.ext).toBe("gif");
     expect(sniffImageType(new TextEncoder().encode("<svg onload=alert(1)>"))).toBeNull();
     expect(sniffImageType(new TextEncoder().encode("<html>"))).toBeNull();
+  });
+});
+
+describe("throttleKey", () => {
+  it("keeps IPv4 addresses and groups IPv6 addresses by /56", () => {
+    expect(throttleKey("203.0.113.7")).toBe("203.0.113.7");
+    expect(throttleKey("2001:db8:1:2::1")).toBe(throttleKey("2001:0db8:0001:00ff:abcd::9"));
+    expect(throttleKey("2001:db8:1:2::1")).not.toBe(throttleKey("2001:db8:1:100::1"));
+    expect(throttleKey("2001:db8:0:0:0:0:0:1")).toBe(throttleKey("2001:db8::1"));
   });
 });
