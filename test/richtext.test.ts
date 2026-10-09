@@ -13,10 +13,19 @@ describe("safeHref", () => {
     expect(safeHref("#section")).toBe("#section");
   });
 
+  it("completes links typed without a scheme", () => {
+    expect(safeHref("hello@example.com")).toBe("mailto:hello@example.com");
+    expect(safeHref("about")).toBe("/about");
+    expect(safeHref("about/team#people")).toBe("/about/team#people");
+    expect(safeHref("www.example.com/path")).toBe("https://www.example.com/path");
+    expect(safeHref("sms:+15555550100")).toBe("sms:+15555550100");
+  });
+
   it("rejects script and data URLs", () => {
     expect(safeHref("javascript:alert(1)")).toBeNull();
     expect(safeHref(" JavaScript:alert(1)")).toBeNull();
     expect(safeHref("data:text/html,<script>alert(1)</script>")).toBeNull();
+    expect(safeHref("javascript:alert(1)//@x.com")).toBeNull();
     expect(safeHref("")).toBeNull();
   });
 });

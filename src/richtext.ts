@@ -26,23 +26,38 @@ const MAX_TEXT_LENGTH = 100_000;
 
 export class RichTextError extends Error {}
 
-/** Allows web, email and phone links plus site-relative paths. */
+const ALLOWED_PROTOCOLS = ["http:", "https:", "mailto:", "tel:", "sms:"];
+const BARE_EMAIL = /^[^\s@/:]+@[^\s@/:]+\.[^\s@/:]+$/;
+
+/**
+ * Allows web, email, phone and SMS links plus links to the site's own pages.
+ * Links typed without a scheme are completed the way people mean them:
+ * "hello@example.com" → mailto:, "example.com/x" → https://, "about" → /about.
+ */
 export function safeHref(href: string): string | null {
   const value = href.trim();
   if (!value || value.length > 2000) return null;
   if ((value.startsWith("/") && !value.startsWith("//")) || value.startsWith("#")) return value;
+  if (BARE_EMAIL.test(value)) return `mailto:${value}`;
 
   let url: URL;
   try {
     url = new URL(value);
   } catch {
+    const host = value.split(/[/?#]/)[0];
     try {
-      url = new URL(`https://${value}`); // "example.com" → https://example.com
+      if (host.includes(".")) {
+        url = new URL(`https://${value}`);
+      } else {
+        // No scheme and no domain: treat it as one of this site's pages.
+        const page = new URL(`/${value}`, "https://site.invalid");
+        return page.pathname + page.search + page.hash;
+      }
     } catch {
       return null;
     }
   }
-  return ["http:", "https:", "mailto:", "tel:"].includes(url.protocol) ? url.href : null;
+  return ALLOWED_PROTOCOLS.includes(url.protocol) ? url.href : null;
 }
 
 /**

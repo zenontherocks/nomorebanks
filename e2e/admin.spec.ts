@@ -57,6 +57,10 @@ test("admin creates, arranges and publishes pages", async ({ page }) => {
   await page.keyboard.type("bold words");
   await page.keyboard.press("ControlOrMeta+b");
   await page.keyboard.type(" in it.");
+  // Tab leaves the editor instead of typing a tab character.
+  await page.keyboard.press("Tab");
+  await expect(editor).not.toBeFocused();
+  await expect(editor).toHaveText("This paragraph has bold words in it.");
 
   await page.getByRole("button", { name: "+ Subsection header" }).click();
   await page.getByPlaceholder("Subsection header text").fill("Details");
@@ -118,6 +122,14 @@ test("admin creates, arranges and publishes pages", async ({ page }) => {
   await expect(items.locator(".page-nav-title")).toHaveText(["AboutHome", "Home Page"]);
   await page.screenshot({ path: "test-results/admin-pages.png", fullPage: true });
 
+  // The arrow buttons reorder too, and keyboard focus stays on the button that was pressed.
+  const moveDown = items.filter({ hasText: "About" }).getByRole("button", { name: "Move About down" });
+  await moveDown.click();
+  await expect(items.locator(".page-nav-title")).toHaveText(["Home PageHome", "About"]);
+  await expect(page.getByRole("button", { name: "Move About down" })).toBeFocused();
+  await page.getByRole("button", { name: "Move About up" }).click();
+  await expect(items.locator(".page-nav-title")).toHaveText(["AboutHome", "Home Page"]);
+
   await page.goto("/");
   await expect(page).toHaveTitle("About this site");
   await expect(page.locator(".site-nav a")).toHaveText(["About", "Home Page"]);
@@ -154,4 +166,24 @@ test("unsaved changes are protected when leaving the editor", async ({ page }) =
   await page.getByRole("button", { name: "+ Main header" }).click();
   await page.getByRole("button", { name: "Save page" }).click();
   await expect(page.getByRole("alert")).toHaveText("Main header module #1 is empty.");
+
+  // Edits typed while a (slow) save is in flight still count as unsaved afterwards.
+  await page.getByPlaceholder("Main header text").fill("Saved text");
+  await page.route("**/api/pages", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await route.continue();
+  });
+  await page.getByRole("button", { name: "Save page" }).click();
+  await page.getByPlaceholder("Main header text").fill("Typed during the save");
+  await expect(page.getByText("Page saved")).toBeVisible();
+  await expect(page.getByPlaceholder("Main header text")).toHaveValue("Typed during the save");
+
+  let prompted = false;
+  page.once("dialog", (dialog) => {
+    prompted = true;
+    return dialog.dismiss();
+  });
+  await page.getByRole("link", { name: "← All pages" }).click();
+  await expect.poll(() => prompted).toBe(true);
+  await expect(page.getByRole("heading", { name: "Edit page" })).toBeVisible();
 });

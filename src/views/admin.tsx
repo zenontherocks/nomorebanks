@@ -68,7 +68,7 @@ export function AdminAppView() {
           </form>
         </div>
       </header>
-      <main id="app" class="admin-main" aria-live="polite">
+      <main id="app" class="admin-main">
         <p>Loading…</p>
       </main>
       <div id="toast" class="toast" role="status" hidden></div>

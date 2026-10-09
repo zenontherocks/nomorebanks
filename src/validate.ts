@@ -59,7 +59,7 @@ function optionalString(value: unknown, label: string, max: number): string {
 function parseModule(raw: unknown, index: number): Module {
   const type = (raw as { type?: unknown } | null)?.type;
   const data = ((raw as { data?: unknown } | null)?.data ?? {}) as Record<string, unknown>;
-  if (typeof type !== "string" || !(type in MODULE_LABELS)) {
+  if (typeof type !== "string" || !Object.hasOwn(MODULE_LABELS, type)) {
     throw new ValidationError(`Module #${index + 1} has an unknown type.`);
   }
   const label = `${MODULE_LABELS[type as ModuleType]} module #${index + 1}`;
@@ -95,6 +95,8 @@ function parseModule(raw: unknown, index: number): Module {
         },
       };
     }
+    default:
+      throw new ValidationError(`Module #${index + 1} has an unknown type.`);
   }
 }
 

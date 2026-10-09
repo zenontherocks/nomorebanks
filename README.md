@@ -47,11 +47,13 @@ public/assets/       CSS, the admin console script, and vendored Quill + Sortabl
 ```
 
 - **Security:** the admin password is a Worker secret, compared in constant time. Sessions
-  are random tokens (only their hashes are stored) in HttpOnly cookies. Five failed logins
-  from one IP lock it out for 15 minutes. Admin writes require a same-origin request and a
-  custom header, and responses carry a strict Content Security Policy. Text is rendered from
-  a structured format with all content escaped and links limited to http(s)/mailto/tel.
-  Uploads are checked by their file contents, so only real raster images are stored.
+  are random tokens in HttpOnly cookies; only hashes tied to the current password are stored,
+  so changing the password logs everyone out. Logins are rate-limited per IP (per /56 for
+  IPv6): five attempts, then a 15-minute lockout, counted atomically so parallel guesses
+  can't get around it. Admin writes require a same-origin request and a custom header, and
+  responses carry a strict Content Security Policy. Text is rendered from a structured format
+  with all content escaped and links limited to http(s)/mailto/tel/sms or the site's own
+  pages. Uploads are checked by their file contents, so only real raster images are stored.
 - **Images** are stored in R2 under random names and cached by browsers indefinitely. Images
   no longer used by any page are deleted after a 24-hour grace period.
 - **Schema changes:** add a new entry to the end of `MIGRATIONS` in `src/schema.ts`. The
@@ -59,7 +61,7 @@ public/assets/       CSS, the admin console script, and vendored Quill + Sortabl
 
 ## Local development
 
-Requires Node.js 20+.
+Requires Node.js 22 or newer.
 
 ```sh
 npm install

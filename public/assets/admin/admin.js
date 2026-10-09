@@ -96,11 +96,13 @@ function moveItem(item, direction) {
 // Unsaved-changes tracking and routing
 
 let dirty = false;
+let changeCount = 0; // lets a save tell whether edits were made while it was in flight
 let currentHash = location.hash;
 let ignoreNextHashChange = false;
 
 function markDirty() {
   dirty = true;
+  changeCount += 1;
 }
 
 window.addEventListener("beforeunload", (event) => {
@@ -137,18 +139,22 @@ async function route() {
     );
   }
   window.scrollTo(0, 0);
+  // Move focus into the new view (announcing it to screen readers) unless the view focused a field itself.
+  if (!app.contains(document.activeElement)) app.querySelector("h1")?.focus({ preventScroll: true });
 }
 
 // ---------------------------------------------------------------------------
 // Pages list
 
-async function showPagesList() {
-  app.replaceChildren(el("p", { class: "muted" }, "Loading…"));
+/** Renders the pages list. `refresh` re-renders in place (no "Loading…" flash). */
+async function showPagesList({ refresh = false } = {}) {
+  if (!refresh) app.replaceChildren(el("p", { class: "muted" }, "Loading…"));
   const { pages } = await apiFetch("/pages");
 
   const list = el("ul", { class: "page-list" });
 
-  async function saveOrder() {
+  /** Saves the list's current order; `focusSelector` names the control to keep focused after re-rendering. */
+  async function saveOrder(focusSelector) {
     const ids = [...list.children].map((item) => Number(item.dataset.id));
     try {
       await apiFetch("/pages/order", { method: "PUT", json: { ids } });
@@ -156,7 +162,8 @@ async function showPagesList() {
     } catch (err) {
       toast(err.message, "error");
     }
-    await showPagesList(); // refresh the "Home" badge
+    await showPagesList({ refresh: true }); // refresh the "Home" badge and addresses
+    if (focusSelector) app.querySelector(focusSelector)?.focus();
   }
 
   for (const [index, page] of pages.entries()) {
@@ -182,17 +189,19 @@ async function showPagesList() {
           type: "button",
           class: "button button-icon",
           "aria-label": `Move ${page.nav_title} up`,
+          "data-move": "up",
           title: "Move up",
           text: "↑",
-          onClick: () => moveItem(item, -1) && saveOrder(),
+          onClick: () => moveItem(item, -1) && saveOrder(`[data-id="${page.id}"] [data-move="up"]`),
         }),
         el("button", {
           type: "button",
           class: "button button-icon",
           "aria-label": `Move ${page.nav_title} down`,
+          "data-move": "down",
           title: "Move down",
           text: "↓",
-          onClick: () => moveItem(item, 1) && saveOrder(),
+          onClick: () => moveItem(item, 1) && saveOrder(`[data-id="${page.id}"] [data-move="down"]`),
         }),
         el("a", { class: "button", href: `#/pages/${page.id}` }, "Edit"),
         el("a", { class: "button", href: index === 0 ? "/" : `/${page.slug}`, target: "_blank", rel: "noopener" }, "View"),
@@ -220,7 +229,7 @@ async function showPagesList() {
     el(
       "div",
       { class: "view-header" },
-      el("h1", {}, "Pages"),
+      el("h1", { tabindex: "-1" }, "Pages"),
       el("a", { class: "button button-primary", href: "#/pages/new" }, "+ New page"),
     ),
     pages.length
@@ -276,6 +285,8 @@ function buildTextBody(card, module) {
         formats: ["bold", "italic", "link", "list"],
         modules: {
           toolbar: [["bold", "italic", "link"], [{ list: "ordered" }, { list: "bullet" }], ["clean"]],
+          // Let Tab move focus to the next control instead of typing a tab character.
+          keyboard: { bindings: { tab: null, "remove tab": null, indent: null, outdent: null } },
         },
       });
       if (module.data?.delta) quill.setContents(module.data.delta, "silent");
@@ -289,7 +300,8 @@ function buildImageBody(card, module) {
   let key = module.data?.key ?? "";
   const preview = el("div", { class: "image-preview" });
   const status = el("p", { class: "upload-status", role: "status" });
-  const fileInput = el("input", { type: "file", accept: IMAGE_TYPES, class: "visually-hidden" });
+  // Opened through chooseButton; hidden so it isn't an extra, unlabeled tab stop.
+  const fileInput = el("input", { type: "file", accept: IMAGE_TYPES, hidden: true });
   const chooseButton = el("button", { type: "button", class: "button", onClick: () => fileInput.click() });
   const alt = el("input", { type: "text", maxlength: "300", value: module.data?.alt ?? "", onInput: markDirty });
   const caption = el("input", { type: "text", maxlength: "500", value: module.data?.caption ?? "", onInput: markDirty });
@@ -445,7 +457,11 @@ async function showEditor(id) {
   }
   updateViewLink();
 
+  let saving = false;
+
   async function save() {
+    if (saving) return; // e.g. Ctrl+S pressed twice
+    saving = true;
     errorBox.hidden = true;
     const payload = {
       page_title: pageTitle.value,
@@ -453,13 +469,20 @@ async function showEditor(id) {
       slug: slug.value,
       modules: [...list.children].map((card) => cardReaders.get(card)()),
     };
+    const changesAtSave = changeCount;
     saveButton.disabled = true;
     saveButton.textContent = "Saving…";
     try {
       const result = pageId
         ? await apiFetch(`/pages/${pageId}`, { method: "PUT", json: payload })
         : await apiFetch("/pages", { method: "POST", json: payload });
-      dirty = false;
+      // The user may have left this editor while the save was running; leave the new view alone.
+      if (!form.isConnected) {
+        toast(`Saved "${result.page.nav_title}"`);
+        return;
+      }
+      // Edits typed while the save was in flight still need saving.
+      dirty = changeCount !== changesAtSave;
       if (!pageId) {
         pageId = result.page.id;
         heading.textContent = "Edit page";
@@ -467,22 +490,27 @@ async function showEditor(id) {
         history.replaceState(null, "", `#/pages/${pageId}`);
         currentHash = location.hash;
       }
-      slug.value = result.page.slug;
+      if (slug.value === payload.slug) slug.value = result.page.slug;
       slugEdited = true;
       updateViewLink();
       toast("Page saved");
     } catch (err) {
+      if (!form.isConnected) {
+        toast(`Not saved: ${err.message}`, "error");
+        return;
+      }
       errorBox.textContent = err.message;
       errorBox.hidden = false;
       errorBox.scrollIntoView({ behavior: "smooth", block: "center" });
       toast("Not saved — see the message above", "error");
     } finally {
+      saving = false;
       saveButton.disabled = false;
       saveButton.textContent = "Save page";
     }
   }
 
-  const heading = el("h1", {}, pageId ? "Edit page" : "New page");
+  const heading = el("h1", { tabindex: "-1" }, pageId ? "Edit page" : "New page");
   const form = el(
     "form",
     { class: "editor", novalidate: true, onSubmit: (event) => (event.preventDefault(), save()) },
