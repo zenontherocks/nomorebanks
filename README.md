@@ -21,9 +21,10 @@ and R2 for uploaded images.
 | Image | uploaded JPEG/PNG/GIF/WebP/AVIF (up to 10 MB) with alt text and optional caption |
 
 Each toolbar control in the editor has a tooltip; the **T<sub>x</sub>** button clears formatting.
-The formats are listed in three places that must agree: the editor toolbar
+The formats are listed in four places that must agree: the editor toolbar
 (`public/assets/admin/admin.js`), the server-side whitelist and renderer (`src/richtext.ts`),
-and the `rt-*` classes in `public/assets/site.css`.
+the `rt-*` classes in `public/assets/site.css`, and the editor's `ql-*` classes and menu labels
+in `public/assets/admin/admin.css`.
 
 **Admin console** at `/admin` (not linked anywhere; login required)
 - Pages list: create, edit, delete, and drag (or use the arrows) to set the navbar order.

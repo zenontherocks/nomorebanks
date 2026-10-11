@@ -256,7 +256,8 @@ function field(text, input, hint, control = input) {
 }
 
 // Text module editor. The formats and values here must match what src/richtext.ts
-// accepts and renders (and the rt-* classes in site.css), or they won't survive saving.
+// accepts and renders (and the rt-* classes in site.css), or they won't survive saving;
+// admin.css styles them in the editor and labels the menu options.
 const FONTS = ["arial", "georgia", "times-new-roman", "verdana", "courier-new"];
 const FontFormat = Quill.import("formats/font");
 FontFormat.whitelist = FONTS;
@@ -273,30 +274,56 @@ const TEXT_TOOLBAR = [
   [{ align: [] }],
   ["clean"],
 ];
-const TOOLBAR_TITLES = {
+/** Tooltips for the text menus, whose visible label (the current style, font or size) is their accessible name. */
+const MENU_TITLES = {
   ".ql-header .ql-picker-label": "Text style: normal text, main heading or subheading",
   ".ql-font .ql-picker-label": "Font",
   ".ql-size .ql-picker-label": "Text size",
+};
+/** Tooltips that double as accessible names for the icon-only controls. */
+const ICON_TITLES = {
   ".ql-bold": "Bold (Ctrl/⌘+B)",
   ".ql-italic": "Italic (Ctrl/⌘+I)",
   ".ql-underline": "Underline (Ctrl/⌘+U)",
   ".ql-strike": "Strikethrough",
-  ".ql-link": "Add or edit a link (select some text first)",
+  ".ql-link":
+    "Link: select some text, then click to add a link. To change a link, click it in the text and choose Edit " +
+    "(clicking this button on linked text removes the link).",
   '.ql-list[value="ordered"]': "Numbered list",
   '.ql-list[value="bullet"]': "Bulleted list",
   ".ql-align .ql-picker-label": "Alignment",
+  ".ql-align .ql-picker-item:not([data-value])": "Align left",
+  '.ql-align .ql-picker-item[data-value="center"]': "Center",
+  '.ql-align .ql-picker-item[data-value="right"]': "Align right",
+  '.ql-align .ql-picker-item[data-value="justify"]': "Justify",
   ".ql-clean": "Clear formatting: turn the selected text back into plain normal text",
 };
 
-/** Quill's toolbar has icons only; give each control a tooltip and an accessible name. */
+/** Quill's toolbar has no labels; give each control a tooltip (and icon-only ones an accessible name). */
 function labelToolbar(quill) {
   const toolbar = quill.getModule("toolbar").container;
-  for (const [selector, title] of Object.entries(TOOLBAR_TITLES)) {
-    for (const control of toolbar.querySelectorAll(selector)) {
-      control.title = title;
-      control.setAttribute("aria-label", title);
+  const label = (titles, withName) => {
+    for (const [selector, title] of Object.entries(titles)) {
+      for (const control of toolbar.querySelectorAll(selector)) {
+        control.title = title;
+        if (withName) control.setAttribute("aria-label", title);
+      }
     }
+  };
+  label(MENU_TITLES, false);
+  label(ICON_TITLES, true);
+}
+
+/**
+ * Pasted documents can use any heading level; fold them into the two the site
+ * offers (as the server does) so the editor shows what will be published.
+ */
+function foldPastedHeadings(_node, delta) {
+  for (const op of delta.ops) {
+    const level = op.attributes?.header;
+    if (level) op.attributes.header = level <= 2 ? 2 : 3;
   }
+  return delta;
 }
 
 function buildTextBody(card, module) {
@@ -313,6 +340,7 @@ function buildTextBody(card, module) {
         formats: TEXT_FORMATS,
         modules: {
           toolbar: TEXT_TOOLBAR,
+          clipboard: { matchers: [[Node.ELEMENT_NODE, foldPastedHeadings]] },
           // Let Tab move focus to the next control instead of typing a tab character.
           keyboard: { bindings: { tab: null, "remove tab": null, indent: null, outdent: null } },
         },

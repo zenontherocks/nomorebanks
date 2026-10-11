@@ -144,6 +144,12 @@ a {
   text-align: justify;
 }
 
+/* Keep a centered or right-aligned list item's bullet/number next to its text, as in the editor. */
+.rich-text li.rt-align-center,
+.rich-text li.rt-align-right {
+  list-style-position: inside;
+}
+
 .rich-text p {
   margin: 0 0 1rem;
 }

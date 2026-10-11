@@ -217,3 +217,30 @@ test("unsaved changes are protected when leaving the editor", async ({ page }) =
   await expect.poll(() => prompted).toBe(true);
   await expect(page.getByRole("heading", { name: "Edit page" })).toBeVisible();
 });
+
+test("toolbar controls are labelled and pasted headings fold to the site's two levels", async ({ page }) => {
+  await page.goto("/admin");
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Log in" }).click();
+  await page.getByRole("link", { name: "+ New page" }).click();
+  await page.getByRole("button", { name: "+ Text" }).click();
+  const card = page.locator(".module-card").first();
+
+  // Icon-only controls are named; the text menus are named by their current value.
+  await expect(card.locator('.ql-align .ql-picker-item[data-value="center"]')).toHaveAttribute("aria-label", "Center");
+  await expect(card.locator(".ql-header .ql-picker-label")).toHaveAttribute("title", /Text style/);
+  await expect(card.locator(".ql-header .ql-picker-label")).not.toHaveAttribute("aria-label");
+
+  // Headings pasted from another document become Main heading / Subheading right away.
+  await card.locator(".ql-editor").click();
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData("text/html", "<h1>Big title</h1><p>Body</p><h4>Small title</h4>");
+    document
+      .querySelector(".ql-editor")!
+      .dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await expect(card.locator(".ql-editor h2")).toHaveText("Big title");
+  await expect(card.locator(".ql-editor h3")).toHaveText("Small title");
+  await expect(card.locator(".ql-editor h1, .ql-editor h4")).toHaveCount(0);
+});

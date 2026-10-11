@@ -111,6 +111,23 @@ describe("renderDelta", () => {
     );
   });
 
+  it("continues numbering across bullet items, like the editor", () => {
+    const item = (text: string, list: string) => [{ insert: text }, { insert: "\n", attributes: { list } }];
+    expect(
+      render([
+        ...item("One", "ordered"),
+        ...item("Two", "ordered"),
+        ...item("Note", "bullet"),
+        ...item("Three", "ordered"),
+        { insert: "Break\n" },
+        ...item("Again one", "ordered"),
+      ]),
+    ).toBe(
+      "<ol><li>One</li><li>Two</li></ol><ul><li>Note</li></ul><ol start=\"3\"><li>Three</li></ol>" +
+        "<p>Break</p><ol><li>Again one</li></ol>",
+    );
+  });
+
   it("renders an empty heading line as a blank line", () => {
     expect(render([{ insert: "A\n" }, { insert: "\n", attributes: { header: 2 } }, { insert: "B\n" }])).toBe(
       "<p>A</p><p><br></p><p>B</p>",

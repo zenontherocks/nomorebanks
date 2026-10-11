@@ -201,13 +201,18 @@ export function renderDelta(delta: Delta): string {
 
   let html = "";
   let openList: ListType | undefined;
+  // Like the editor, numbering continues across bullet items and restarts only after a non-list line.
+  let numbered = 0;
   const listTag = (list: ListType) => (list === "ordered" ? "ol" : "ul");
   for (const line of lines) {
     if (line.list !== openList) {
       if (openList) html += `</${listTag(openList)}>`;
-      if (line.list) html += `<${listTag(line.list)}>`;
+      if (line.list === "ordered" && numbered > 0) html += `<ol start="${numbered + 1}">`;
+      else if (line.list) html += `<${listTag(line.list)}>`;
       openList = line.list;
     }
+    if (!line.list) numbered = 0;
+    else if (line.list === "ordered") numbered += 1;
     const attrs = line.align ? ` class="rt-align-${line.align}"` : "";
     const inner = line.segments.map(renderSegment).join("");
     if (line.list) html += `<li${attrs}>${inner || "<br>"}</li>`;
