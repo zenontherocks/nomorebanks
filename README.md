@@ -17,10 +17,13 @@ and R2 for uploaded images.
 
 | Module | Shown as |
 |---|---|
-| Main header | large section heading (`<h2>`) |
-| Subsection header | smaller heading (`<h3>`) |
-| Text | paragraphs with bold, italic, links and bulleted/numbered lists |
+| Text | any mix of main headings (`<h2>`), subheadings (`<h3>`) and normal paragraphs, with text size (small/normal/large/huge), font (default, Arial, Georgia, Times New Roman, Verdana, Courier New), bold, italic, underline, strikethrough, links, bulleted/numbered lists and alignment |
 | Image | uploaded JPEG/PNG/GIF/WebP/AVIF (up to 10 MB) with alt text and optional caption |
+
+Each toolbar control in the editor has a tooltip; the **T<sub>x</sub>** button clears formatting.
+The formats are listed in three places that must agree: the editor toolbar
+(`public/assets/admin/admin.js`), the server-side whitelist and renderer (`src/richtext.ts`),
+and the `rt-*` classes in `public/assets/site.css`.
 
 **Admin console** at `/admin` (not linked anywhere; login required)
 - Pages list: create, edit, delete, and drag (or use the arrows) to set the navbar order.

@@ -1,8 +1,6 @@
 import { type Delta, RichTextError, deltaPlainText, normalizeDelta } from "./richtext";
 
 export type Module =
-  | { type: "heading"; data: { text: string } }
-  | { type: "subheading"; data: { text: string } }
   | { type: "text"; data: { delta: Delta } }
   | { type: "image"; data: { key: string; alt: string; caption: string } };
 
@@ -16,8 +14,6 @@ export interface PageInput {
 }
 
 export const MODULE_LABELS: Record<ModuleType, string> = {
-  heading: "Main header",
-  subheading: "Subsection header",
   text: "Text",
   image: "Image",
 };
@@ -65,12 +61,6 @@ function parseModule(raw: unknown, index: number): Module {
   const label = `${MODULE_LABELS[type as ModuleType]} module #${index + 1}`;
 
   switch (type as ModuleType) {
-    case "heading":
-    case "subheading": {
-      const text = optionalString(data.text, label, 300);
-      if (!text) throw new ValidationError(`${label} is empty.`);
-      return { type: type as "heading" | "subheading", data: { text } };
-    }
     case "text": {
       let delta: Delta;
       try {

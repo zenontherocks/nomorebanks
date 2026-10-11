@@ -4,12 +4,31 @@
 // ever reach the public page, and all text is escaped.
 
 export type ListType = "bullet" | "ordered";
+/** 2 = main heading, 3 = subheading (the page title is the only h1). */
+export type HeaderLevel = 2 | 3;
+export type Align = "center" | "right" | "justify";
+
+/** Font choices offered in the editor (keys of the font picker). */
+export const FONTS = ["arial", "georgia", "times-new-roman", "verdana", "courier-new"] as const;
+export type Font = (typeof FONTS)[number];
+
+/** Text sizes besides normal. */
+export const SIZES = ["small", "large", "huge"] as const;
+export type Size = (typeof SIZES)[number];
 
 export interface DeltaAttributes {
+  // Inline formats, carried by text runs.
   bold?: true;
   italic?: true;
+  underline?: true;
+  strike?: true;
   link?: string;
+  size?: Size;
+  font?: Font;
+  // Line formats, carried by the "\n" that ends each line.
+  header?: HeaderLevel;
   list?: ListType;
+  align?: Align;
 }
 
 export interface DeltaOp {
@@ -60,10 +79,37 @@ export function safeHref(href: string): string | null {
   return ALLOWED_PROTOCOLS.includes(url.protocol) ? url.href : null;
 }
 
-/**
- * Validates untrusted Delta JSON from the admin console, keeping only plain
- * text runs and the formats the editor offers (bold, italic, link, lists).
- */
+function isOneOf<T extends string>(values: readonly T[], value: unknown): value is T {
+  return typeof value === "string" && (values as readonly string[]).includes(value);
+}
+
+/** Keeps only the formats the editor offers, with values from their allowed lists. */
+function normalizeAttributes(source: Record<string, unknown>): DeltaAttributes {
+  const attributes: DeltaAttributes = {};
+  if (source.bold === true) attributes.bold = true;
+  if (source.italic === true) attributes.italic = true;
+  if (source.underline === true) attributes.underline = true;
+  if (source.strike === true) attributes.strike = true;
+  if (typeof source.link === "string") {
+    const href = safeHref(source.link);
+    if (href) attributes.link = href;
+  }
+  if (isOneOf(SIZES, source.size)) attributes.size = source.size;
+  if (isOneOf(FONTS, source.font)) attributes.font = source.font;
+
+  // Pasted content can carry any heading level; fold them into the two we offer.
+  const header = Number(source.header);
+  if (header >= 1 && header <= 2) attributes.header = 2;
+  else if (header >= 3 && header <= 6) attributes.header = 3;
+  else if (source.list === "ordered") attributes.list = "ordered";
+  else if (source.list === "bullet" || source.list === "checked" || source.list === "unchecked") {
+    attributes.list = "bullet";
+  }
+  if (isOneOf(["center", "right", "justify"] as const, source.align)) attributes.align = source.align;
+  return attributes;
+}
+
+/** Validates untrusted Delta JSON from the admin console, keeping only plain text runs and supported formats. */
 export function normalizeDelta(input: unknown): Delta {
   const rawOps = (input as { ops?: unknown } | null)?.ops;
   if (!Array.isArray(rawOps)) throw new RichTextError("Text content is not in the expected format.");
@@ -76,19 +122,8 @@ export function normalizeDelta(input: unknown): Delta {
     if (typeof insert !== "string" || insert === "") continue; // drop embeds
     length += insert.length;
 
-    const source = ((raw as { attributes?: unknown }).attributes ?? {}) as Record<string, unknown>;
-    const attributes: DeltaAttributes = {};
-    if (source.bold === true) attributes.bold = true;
-    if (source.italic === true) attributes.italic = true;
-    if (typeof source.link === "string") {
-      const href = safeHref(source.link);
-      if (href) attributes.link = href;
-    }
-    if (source.list === "ordered") attributes.list = "ordered";
-    else if (source.list === "bullet" || source.list === "checked" || source.list === "unchecked") {
-      attributes.list = "bullet";
-    }
-
+    const source = (raw as { attributes?: unknown }).attributes;
+    const attributes = normalizeAttributes(source && typeof source === "object" ? (source as Record<string, unknown>) : {});
     ops.push(Object.keys(attributes).length ? { insert, attributes } : { insert });
   }
   if (length > MAX_TEXT_LENGTH) throw new RichTextError("Text is too long.");
@@ -118,13 +153,22 @@ interface Segment {
 
 interface Line {
   segments: Segment[];
+  header?: HeaderLevel;
   list?: ListType;
+  align?: Align;
 }
 
 function renderSegment({ text, attributes }: Segment): string {
   let html = escapeHtml(text);
   if (attributes.bold) html = `<strong>${html}</strong>`;
   if (attributes.italic) html = `<em>${html}</em>`;
+  if (attributes.underline) html = `<u>${html}</u>`;
+  if (attributes.strike) html = `<s>${html}</s>`;
+  const classes = [
+    attributes.size && `rt-size-${attributes.size}`,
+    attributes.font && `rt-font-${attributes.font}`,
+  ].filter(Boolean);
+  if (classes.length) html = `<span class="${classes.join(" ")}">${html}</span>`;
   if (attributes.link) {
     const external = /^(https?:)?\/\//.test(attributes.link);
     const rel = external ? ' rel="noopener noreferrer"' : "";
@@ -133,16 +177,17 @@ function renderSegment({ text, attributes }: Segment): string {
   return html;
 }
 
-/** Renders a normalized Delta to HTML paragraphs and lists. */
+/** Renders a normalized Delta to HTML headings, paragraphs and lists. */
 export function renderDelta(delta: Delta): string {
-  // In a Delta, each "\n" ends a line and carries that line's block format
-  // (e.g. list type); text runs carry inline formats.
+  // In a Delta, each "\n" ends a line and carries that line's format (heading
+  // level, list type, alignment); text runs carry inline formats.
   const lines: Line[] = [];
   let current: Segment[] = [];
   for (const op of delta.ops) {
     op.insert.split("\n").forEach((part, index) => {
       if (index > 0) {
-        lines.push({ segments: current, list: op.attributes?.list });
+        const { header, list, align } = op.attributes ?? {};
+        lines.push({ segments: current, header, list, align });
         current = [];
       }
       if (part) current.push({ text: part, attributes: op.attributes ?? {} });
@@ -163,8 +208,11 @@ export function renderDelta(delta: Delta): string {
       if (line.list) html += `<${listTag(line.list)}>`;
       openList = line.list;
     }
-    const inner = line.segments.map(renderSegment).join("") || "<br>";
-    html += line.list ? `<li>${inner}</li>` : `<p>${inner}</p>`;
+    const attrs = line.align ? ` class="rt-align-${line.align}"` : "";
+    const inner = line.segments.map(renderSegment).join("");
+    if (line.list) html += `<li${attrs}>${inner || "<br>"}</li>`;
+    else if (line.header && inner) html += `<h${line.header}${attrs}>${inner}</h${line.header}>`;
+    else html += `<p${attrs}>${inner || "<br>"}</p>`;
   }
   if (openList) html += `</${listTag(openList)}>`;
   return html;

@@ -5,8 +5,6 @@
 // Sortable (drag and drop) and Quill (rich text) are loaded as globals before this module.
 
 const MODULE_LABELS = {
-  heading: "Main header",
-  subheading: "Subsection header",
   text: "Text",
   image: "Image",
 };
@@ -257,18 +255,48 @@ function field(text, input, hint, control = input) {
   return el("div", { class: "field" }, el("label", { class: "field-label", for: input.id }, text), control, hintEl);
 }
 
-function buildHeadingBody(card, module) {
-  const input = el("input", {
-    type: "text",
-    class: `heading-input heading-input-${module.type}`,
-    maxlength: "300",
-    placeholder: module.type === "heading" ? "Main header text" : "Subsection header text",
-    "aria-label": MODULE_LABELS[module.type],
-    value: module.data?.text ?? "",
-    onInput: markDirty,
-  });
-  cardReaders.set(card, () => ({ type: module.type, data: { text: input.value } }));
-  return { body: input, focus: () => input.focus() };
+// Text module editor. The formats and values here must match what src/richtext.ts
+// accepts and renders (and the rt-* classes in site.css), or they won't survive saving.
+const FONTS = ["arial", "georgia", "times-new-roman", "verdana", "courier-new"];
+const FontFormat = Quill.import("formats/font");
+FontFormat.whitelist = FONTS;
+Quill.register(FontFormat, true);
+
+const TEXT_FORMATS = ["header", "font", "size", "bold", "italic", "underline", "strike", "link", "list", "align"];
+const TEXT_TOOLBAR = [
+  [{ header: [false, 2, 3] }],
+  [{ font: [false, ...FONTS] }],
+  [{ size: ["small", false, "large", "huge"] }],
+  ["bold", "italic", "underline", "strike"],
+  ["link"],
+  [{ list: "ordered" }, { list: "bullet" }],
+  [{ align: [] }],
+  ["clean"],
+];
+const TOOLBAR_TITLES = {
+  ".ql-header .ql-picker-label": "Text style: normal text, main heading or subheading",
+  ".ql-font .ql-picker-label": "Font",
+  ".ql-size .ql-picker-label": "Text size",
+  ".ql-bold": "Bold (Ctrl/⌘+B)",
+  ".ql-italic": "Italic (Ctrl/⌘+I)",
+  ".ql-underline": "Underline (Ctrl/⌘+U)",
+  ".ql-strike": "Strikethrough",
+  ".ql-link": "Add or edit a link (select some text first)",
+  '.ql-list[value="ordered"]': "Numbered list",
+  '.ql-list[value="bullet"]': "Bulleted list",
+  ".ql-align .ql-picker-label": "Alignment",
+  ".ql-clean": "Clear formatting: turn the selected text back into plain normal text",
+};
+
+/** Quill's toolbar has icons only; give each control a tooltip and an accessible name. */
+function labelToolbar(quill) {
+  const toolbar = quill.getModule("toolbar").container;
+  for (const [selector, title] of Object.entries(TOOLBAR_TITLES)) {
+    for (const control of toolbar.querySelectorAll(selector)) {
+      control.title = title;
+      control.setAttribute("aria-label", title);
+    }
+  }
 }
 
 function buildTextBody(card, module) {
@@ -281,14 +309,15 @@ function buildTextBody(card, module) {
     init() {
       quill = new Quill(container, {
         theme: "snow",
-        placeholder: "Write something…",
-        formats: ["bold", "italic", "link", "list"],
+        placeholder: "Write something… Use the first menu for headings.",
+        formats: TEXT_FORMATS,
         modules: {
-          toolbar: [["bold", "italic", "link"], [{ list: "ordered" }, { list: "bullet" }], ["clean"]],
+          toolbar: TEXT_TOOLBAR,
           // Let Tab move focus to the next control instead of typing a tab character.
           keyboard: { bindings: { tab: null, "remove tab": null, indent: null, outdent: null } },
         },
       });
+      labelToolbar(quill);
       if (module.data?.delta) quill.setContents(module.data.delta, "silent");
       quill.on("text-change", (_delta, _old, source) => source === "user" && markDirty());
     },
@@ -358,15 +387,14 @@ function buildImageBody(card, module) {
 
 function hasContent(card) {
   const { type, data } = cardReaders.get(card)();
-  if (type === "text") return data.delta.ops.some((op) => typeof op.insert === "string" && op.insert.trim());
   if (type === "image") return Boolean(data.key);
-  return Boolean(data.text.trim());
+  return data.delta.ops.some((op) => typeof op.insert === "string" && op.insert.trim());
 }
 
 /** Appends a module card to the list and returns a function that focuses it. */
 function addModuleCard(list, module) {
   const card = el("li", { class: `module-card module-${module.type}` });
-  const builders = { heading: buildHeadingBody, subheading: buildHeadingBody, text: buildTextBody, image: buildImageBody };
+  const builders = { text: buildTextBody, image: buildImageBody };
   const { body, init, focus } = builders[module.type](card, module);
   const label = MODULE_LABELS[module.type];
 
@@ -439,7 +467,7 @@ async function showEditor(id) {
       class: "button",
       text: `+ ${label}`,
       onClick: () => {
-        const data = type === "text" ? {} : type === "image" ? { key: "", alt: "", caption: "" } : { text: "" };
+        const data = type === "image" ? { key: "", alt: "", caption: "" } : {};
         const focus = addModuleCard(list, { type, data });
         markDirty();
         list.lastElementChild.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -531,7 +559,12 @@ async function showEditor(id) {
       "section",
       { class: "modules" },
       el("h2", {}, "Content"),
-      el("p", { class: "muted" }, "Modules appear on the page from top to bottom. Drag the ⠿ handle (or use the arrows) to reorder them."),
+      el(
+        "p",
+        { class: "muted" },
+        "Modules appear on the page from top to bottom. Drag the ⠿ handle (or use the arrows) to reorder them. " +
+          "Text modules hold headings and paragraphs: pick a line's style from the first menu in the toolbar.",
+      ),
       list,
       el("div", { class: "add-module" }, el("span", { class: "add-module-label" }, "Add module:"), addButtons),
     ),

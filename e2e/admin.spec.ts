@@ -13,6 +13,12 @@ async function makePng(page: Page): Promise<Buffer> {
   return png;
 }
 
+/** Chooses a value from one of a text module's toolbar menus (header, font or size). */
+async function pickFormat(card: Locator, format: "header" | "font" | "size", value: string) {
+  await card.locator(`.ql-${format} .ql-picker-label`).click();
+  await card.locator(`.ql-${format} .ql-picker-item[data-value="${value}"]`).click();
+}
+
 async function dragAbove(page: Page, handle: Locator, target: Locator) {
   // SortableJS listens to pointer/drag events; move in small steps so it sees the drag.
   const from = (await handle.boundingBox())!;
@@ -40,30 +46,33 @@ test("admin creates, arranges and publishes pages", async ({ page }) => {
   await page.getByRole("button", { name: "Log in" }).click();
   await expect(page.getByRole("heading", { name: "Pages" })).toBeVisible();
 
-  // Create the home page with one of each module type.
+  // Create the home page: two text modules (each with a heading and body text) and an image.
   await page.getByRole("link", { name: "+ New page" }).click();
   await page.getByLabel("Page title").fill("Welcome to the site");
   await page.getByLabel("Navbar title").fill("Home Page");
   await expect(page.locator(".slug-field input")).toHaveValue("home-page");
 
-  await page.getByRole("button", { name: "+ Main header" }).click();
-  await page.getByPlaceholder("Main header text").fill("Hello there");
-
+  const cards = page.locator(".module-card");
   await page.getByRole("button", { name: "+ Text" }).click();
-  const editor = page.locator(".ql-editor").last();
+  const first = cards.nth(0);
+  const editor = first.locator(".ql-editor");
+  // The toolbar explains its controls, including the "Tx" clear-formatting button.
+  await expect(first.locator(".ql-clean")).toHaveAttribute("title", /Clear formatting/);
+  await expect(first.locator(".ql-header .ql-picker-label")).toHaveAttribute("title", /Text style/);
   await editor.click();
+  await pickFormat(first, "header", "2");
+  await page.keyboard.type("Hello there");
+  await page.keyboard.press("Enter"); // a new line after a heading is normal text again
   await page.keyboard.type("This paragraph has ");
   await page.keyboard.press("ControlOrMeta+b");
   await page.keyboard.type("bold words");
   await page.keyboard.press("ControlOrMeta+b");
   await page.keyboard.type(" in it.");
+  await expect(editor.locator("h2")).toHaveText("Hello there");
+  await expect(editor.locator("p")).toHaveText("This paragraph has bold words in it.");
   // Tab leaves the editor instead of typing a tab character.
   await page.keyboard.press("Tab");
   await expect(editor).not.toBeFocused();
-  await expect(editor).toHaveText("This paragraph has bold words in it.");
-
-  await page.getByRole("button", { name: "+ Subsection header" }).click();
-  await page.getByPlaceholder("Subsection header text").fill("Details");
 
   await page.getByRole("button", { name: "+ Image" }).click();
   const imageCard = page.locator(".module-card.module-image");
@@ -76,41 +85,58 @@ test("admin creates, arranges and publishes pages", async ({ page }) => {
   await expect(imageCard.getByLabel("Alt text")).toHaveValue("sunset gradient");
   await imageCard.getByLabel("Caption (optional)").fill("A gradient, for testing");
 
-  // Drag the subsection header above the text module.
-  const cards = page.locator(".module-card");
-  await dragAbove(page, cards.nth(2).locator(".drag-handle"), cards.nth(1));
-  await expect(cards.locator(".module-label")).toHaveText(["Main header", "Subsection header", "Text", "Image"]);
+  await page.getByRole("button", { name: "+ Text" }).click();
+  const second = cards.nth(2);
+  await second.locator(".ql-editor").click();
+  await pickFormat(second, "header", "3");
+  await page.keyboard.type("Details");
+  await page.keyboard.press("Enter");
+  await pickFormat(second, "font", "georgia");
+  await pickFormat(second, "size", "large");
+  await page.keyboard.type("Set in Georgia, large.");
+  await expect(second.locator(".ql-editor h3")).toHaveText("Details");
+  await expect(second.locator(".ql-editor .ql-font-georgia.ql-size-large")).toHaveText("Set in Georgia, large.");
 
-  // The arrow buttons reorder too: move the image above the text, then back.
+  // Drag the second text module above the image.
+  await dragAbove(page, second.locator(".drag-handle"), imageCard);
+  await expect(cards.locator(".module-label")).toHaveText(["Text", "Text", "Image"]);
+  await expect(cards.nth(1).locator(".ql-editor h3")).toHaveText("Details");
+
+  // The arrow buttons reorder too: move the image up, then back down.
   await imageCard.getByRole("button", { name: "Move up" }).click();
-  await expect(cards.locator(".module-label")).toHaveText(["Main header", "Subsection header", "Image", "Text"]);
+  await expect(cards.locator(".module-label")).toHaveText(["Text", "Image", "Text"]);
   await imageCard.getByRole("button", { name: "Move down" }).click();
+  await expect(cards.locator(".module-label")).toHaveText(["Text", "Text", "Image"]);
 
   await page.getByRole("button", { name: "Save page" }).click();
   await expect(page.getByText("Page saved")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Edit page" })).toBeVisible();
   await page.screenshot({ path: "test-results/admin-editor.png", fullPage: true });
 
-  // The public page shows the modules in the arranged order.
+  // The public page shows the modules, with their headings and styles, in the arranged order.
   await page.goto("/");
   await expect(page).toHaveTitle("Welcome to the site");
   const content = page.locator("article.page > *");
   await expect(content.nth(0)).toHaveText("Welcome to the site");
-  await expect(content.nth(1)).toHaveText("Hello there");
-  await expect(content.nth(2)).toHaveText("Details");
-  await expect(content.nth(3)).toHaveText("This paragraph has bold words in it.");
-  await expect(content.nth(3).locator("strong")).toHaveText("bold words");
-  await expect(content.nth(4).locator("img")).toHaveAttribute("alt", "sunset gradient");
-  await expect(content.nth(4).locator("img")).toHaveJSProperty("complete", true);
-  expect(await content.nth(4).locator("img").evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  await expect(content.nth(1).locator("h2")).toHaveText("Hello there");
+  await expect(content.nth(1).locator("p")).toHaveText("This paragraph has bold words in it.");
+  await expect(content.nth(1).locator("strong")).toHaveText("bold words");
+  await expect(content.nth(2).locator("h3")).toHaveText("Details");
+  const styled = content.nth(2).locator("span.rt-font-georgia.rt-size-large");
+  await expect(styled).toHaveText("Set in Georgia, large.");
+  await expect(styled).toHaveCSS("font-family", /Georgia/);
+  await expect(content.nth(3).locator("img")).toHaveAttribute("alt", "sunset gradient");
+  await expect(content.nth(3).locator("img")).toHaveJSProperty("complete", true);
+  expect(await content.nth(3).locator("img").evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
   await page.screenshot({ path: "test-results/public-page.png", fullPage: true });
 
   // A second page appears in the navbar; dragging it first makes it the home page.
   await page.goto("/admin#/pages/new");
   await page.getByLabel("Page title").fill("About this site");
   await page.getByLabel("Navbar title").fill("About");
-  await page.getByRole("button", { name: "+ Main header" }).click();
-  await page.getByPlaceholder("Main header text").fill("Who we are");
+  await page.getByRole("button", { name: "+ Text" }).click();
+  await page.locator(".ql-editor").click();
+  await page.keyboard.type("Who we are");
   await page.getByRole("button", { name: "Save page" }).click();
   await expect(page.getByText("Page saved")).toBeVisible();
 
@@ -163,20 +189,24 @@ test("unsaved changes are protected when leaving the editor", async ({ page }) =
 
   // Saving with an empty module explains what's wrong instead of failing silently.
   await page.getByLabel("Navbar title").fill("Draft");
-  await page.getByRole("button", { name: "+ Main header" }).click();
+  await page.getByRole("button", { name: "+ Text" }).click();
   await page.getByRole("button", { name: "Save page" }).click();
-  await expect(page.getByRole("alert")).toHaveText("Main header module #1 is empty.");
+  await expect(page.getByRole("alert")).toHaveText("Text module #1 is empty.");
 
   // Edits typed while a (slow) save is in flight still count as unsaved afterwards.
-  await page.getByPlaceholder("Main header text").fill("Saved text");
+  const editor = page.locator(".ql-editor");
+  await editor.click();
+  await page.keyboard.type("Saved text");
   await page.route("**/api/pages", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 1000));
     await route.continue();
   });
   await page.getByRole("button", { name: "Save page" }).click();
-  await page.getByPlaceholder("Main header text").fill("Typed during the save");
+  await editor.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(", typed during the save");
   await expect(page.getByText("Page saved")).toBeVisible();
-  await expect(page.getByPlaceholder("Main header text")).toHaveValue("Typed during the save");
+  await expect(editor).toHaveText("Saved text, typed during the save");
 
   let prompted = false;
   page.once("dialog", (dialog) => {
