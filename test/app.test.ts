@@ -2,7 +2,7 @@ import { createExecutionContext, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { cleanupOrphanImages } from "../src/images";
 import app from "../src/index";
-import { ORIGIN, PNG_BYTES, api, fetchWorker, freshIp, login, postLogin, textDelta } from "./helpers";
+import { ORIGIN, PNG_BYTES, api, fetchWorker, freshIp, headingDelta, login, postLogin, textDelta } from "./helpers";
 
 /** Calls the app directly, so concurrent requests really overlap (the loopback fetch serializes them). */
 function callApp(request: Request, bindings: Cloudflare.Env = env) {
@@ -147,9 +147,22 @@ describe("admin API", () => {
       page_title: "About this site",
       nav_title: "About",
       modules: [
-        { type: "heading", data: { text: "Our story" } },
-        { type: "text", data: { delta: textDelta("It began <b>long</b> ago.") } },
-        { type: "subheading", data: { text: "Pictures" } },
+        {
+          // One text module holding a heading, a paragraph and a subheading.
+          type: "text",
+          data: {
+            delta: {
+              ops: [
+                { insert: "Our story" },
+                { insert: "\n", attributes: { header: 2 } },
+                { insert: "It began <b>long</b> ago " },
+                { insert: "in Georgia", attributes: { font: "georgia", size: "large" } },
+                { insert: ".\nPictures" },
+                { insert: "\n", attributes: { header: 3, align: "center" } },
+              ],
+            },
+          },
+        },
         { type: "image", data: { key: imageKey, alt: "A pixel", caption: "Tiny" } },
       ],
     });
@@ -160,10 +173,14 @@ describe("admin API", () => {
     expect(homeHtml).toMatch(/<a href="\/"[^>]*>Home<\/a>.*<a href="\/about"[^>]*>About<\/a>/s);
 
     const html = await (await fetchWorker("/about")).text();
-    const order = ["<h1", "<h2", "<p>", "<h3", "<figure"].map((tag) => html.indexOf(tag));
+    const order = ["<h1", "<h2>Our story</h2>", "<p>", '<h3 class="rt-align-center">Pictures</h3>', "<figure"].map(
+      (tag) => html.indexOf(tag),
+    );
     expect(order.every((index) => index >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(html).toContain("It began &lt;b&gt;long&lt;/b&gt; ago.");
+    expect(html).toContain(
+      'It began &lt;b&gt;long&lt;/b&gt; ago <span class="rt-size-large rt-font-georgia">in Georgia</span>.',
+    );
     expect(html).toContain(`src="/media/${imageKey}"`);
     expect(html).toContain("<figcaption>Tiny</figcaption>");
 
@@ -180,8 +197,8 @@ describe("admin API", () => {
       page_title: "Page",
       nav_title: "Page",
       modules: [
-        { type: "heading", data: { text: "First" } },
-        { type: "heading", data: { text: "Second" } },
+        { type: "text", data: { delta: textDelta("First") } },
+        { type: "text", data: { delta: headingDelta("Second") } },
       ],
     });
 
@@ -192,8 +209,8 @@ describe("admin API", () => {
         nav_title: "Renamed",
         slug: "renamed",
         modules: [
-          { type: "heading", data: { text: "Second" } },
-          { type: "heading", data: { text: "First" } },
+          { type: "text", data: { delta: headingDelta("Second") } },
+          { type: "text", data: { delta: textDelta("First") } },
         ],
       },
     });
@@ -201,10 +218,11 @@ describe("admin API", () => {
 
     const loaded = (await (await api(cookie, `/pages/${page.id}`)).json()) as {
       page: { slug: string };
-      modules: { data: { text: string } }[];
+      modules: { data: { delta: { ops: { insert: string }[] } } }[];
     };
     expect(loaded.page.slug).toBe("renamed");
-    expect(loaded.modules.map((m) => m.data.text)).toEqual(["Second", "First"]);
+    expect(loaded.modules.map((m) => m.data.delta.ops[0].insert.trim())).toEqual(["Second", "First"]);
+    expect(loaded.modules[0].data.delta).toEqual(headingDelta("Second"));
   });
 
   it("rejects duplicate and reserved slugs with a clear message", async () => {
@@ -243,7 +261,7 @@ describe("admin API", () => {
     const { page } = await createPage(cookie, {
       page_title: "Gone",
       nav_title: "Gone",
-      modules: [{ type: "heading", data: { text: "Bye" } }],
+      modules: [{ type: "text", data: { delta: textDelta("Bye") } }],
     });
     expect((await api(cookie, `/pages/${page.id}`, { method: "DELETE" })).status).toBe(200);
     expect((await fetchWorker("/gone")).status).toBe(404);

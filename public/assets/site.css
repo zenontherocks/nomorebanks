@@ -76,22 +76,78 @@ a {
   margin: 0 0 1.5rem;
 }
 
-.module-heading {
+/* Text modules: headings, paragraphs and lists written in the admin editor. */
+.rich-text h2 {
   font-size: 1.65rem;
   line-height: 1.25;
   margin: 2.25rem 0 0.75rem;
 }
 
-.module-subheading {
+.rich-text h3 {
   font-size: 1.25rem;
   line-height: 1.3;
   margin: 1.75rem 0 0.5rem;
 }
 
+.rich-text h2,
+.rich-text h3,
 .rich-text p,
 .rich-text li {
   white-space: pre-wrap;
   overflow-wrap: break-word;
+}
+
+/* Text sizes, fonts and alignment chosen in the editor (keep in sync with admin.css). */
+.rt-size-small {
+  font-size: 0.8em;
+}
+
+.rt-size-large {
+  font-size: 1.4em;
+  line-height: 1.35;
+}
+
+.rt-size-huge {
+  font-size: 2em;
+  line-height: 1.2;
+}
+
+.rt-font-arial {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.rt-font-georgia {
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.rt-font-times-new-roman {
+  font-family: "Times New Roman", Times, serif;
+}
+
+.rt-font-verdana {
+  font-family: Verdana, Geneva, sans-serif;
+}
+
+.rt-font-courier-new {
+  font-family: "Courier New", Courier, monospace;
+}
+
+.rt-align-center {
+  text-align: center;
+}
+
+.rt-align-right {
+  text-align: right;
+}
+
+.rt-align-justify {
+  text-align: justify;
+}
+
+/* Keep a centered or right-aligned list item's bullet/number next to its text, as in the editor. */
+.rich-text li.rt-align-center,
+.rich-text li.rt-align-right {
+  list-style-position: inside;
 }
 
 .rich-text p {

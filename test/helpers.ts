@@ -50,3 +50,8 @@ export function api(cookie: string, path: string, init: RequestInit & { json?: u
 export function textDelta(text: string) {
   return { ops: [{ insert: `${text}\n` }] };
 }
+
+/** A single heading line: level 2 is a main heading, 3 a subheading. */
+export function headingDelta(text: string, level: 2 | 3 = 2) {
+  return { ops: [{ insert: text }, { insert: "\n", attributes: { header: level } }] };
+}

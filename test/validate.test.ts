@@ -35,10 +35,14 @@ describe("parsePageInput", () => {
 
   it("names the module that has a problem", () => {
     const modules = [
-      { type: "heading", data: { text: "Hi" } },
-      { type: "text", data: { delta: { ops: [{ insert: "\n" }] } } },
+      { type: "text", data: { delta: { ops: [{ insert: "Hi\n" }] } } },
+      { type: "text", data: { delta: { ops: [{ insert: "\n", attributes: { header: 2 } }] } } },
     ];
     expect(() => parsePageInput({ ...base, modules })).toThrow("Text module #2 is empty.");
+    // Headings are a text style now, not separate module types.
+    expect(() => parsePageInput({ ...base, modules: [{ type: "heading", data: { text: "Hi" } }] })).toThrow(
+      "Module #1 has an unknown type.",
+    );
     expect(() => parsePageInput({ ...base, modules: [{ type: "video", data: {} }] })).toThrow(ValidationError);
     expect(() => parsePageInput({ ...base, modules: [{ type: "constructor", data: {} }] })).toThrow(
       "Module #1 has an unknown type.",

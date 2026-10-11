@@ -46,10 +46,6 @@ export function SiteLayout({ title, nav, currentId, children }: SiteLayoutProps)
 
 function ModuleView({ module }: { module: Module }) {
   switch (module.type) {
-    case "heading":
-      return <h2 class="module-heading">{module.data.text}</h2>;
-    case "subheading":
-      return <h3 class="module-subheading">{module.data.text}</h3>;
     case "text":
       return (
         <div

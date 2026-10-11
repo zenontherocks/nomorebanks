@@ -40,7 +40,7 @@ describe("normalizeDelta", () => {
     const delta = normalizeDelta({
       ops: [
         { insert: { image: "https://evil.example/x.png" } },
-        { insert: "hi", attributes: { bold: true, color: "red", header: 1, link: "javascript:alert(1)" } },
+        { insert: "hi", attributes: { bold: true, color: "red", link: "javascript:alert(1)" } },
         { insert: "\n", attributes: { list: "checked" } },
       ],
     });
@@ -48,9 +48,93 @@ describe("normalizeDelta", () => {
       ops: [{ insert: "hi", attributes: { bold: true } }, { insert: "\n", attributes: { list: "bullet" } }],
     });
   });
+
+  it("keeps sizes, fonts and alignment only from the allowed lists", () => {
+    const delta = normalizeDelta({
+      ops: [
+        { insert: "a", attributes: { size: "large", font: "georgia", underline: true, strike: true } },
+        { insert: "b", attributes: { size: "72px", font: "comic-sans", background: "#ff0" } },
+        { insert: "\n", attributes: { align: "center" } },
+        { insert: "\n", attributes: { align: "sideways" } },
+      ],
+    });
+    expect(delta.ops).toEqual([
+      { insert: "a", attributes: { size: "large", font: "georgia", underline: true, strike: true } },
+      { insert: "b" },
+      { insert: "\n", attributes: { align: "center" } },
+      { insert: "\n" },
+    ]);
+  });
+
+  it("folds pasted heading levels into main heading and subheading", () => {
+    const levels = [1, 2, 3, 4, 6, 7, "2"].map(
+      (header) => normalizeDelta({ ops: [{ insert: "\n", attributes: { header } }] }).ops[0].attributes?.header,
+    );
+    expect(levels).toEqual([2, 2, 3, 3, 3, undefined, 2]);
+    // A line can't be both a heading and a list item; the heading wins.
+    expect(normalizeDelta({ ops: [{ insert: "\n", attributes: { header: 2, list: "bullet" } }] }).ops[0]).toEqual({
+      insert: "\n",
+      attributes: { header: 2 },
+    });
+  });
 });
 
 describe("renderDelta", () => {
+  it("renders headings and normal text from one module", () => {
+    expect(
+      render([
+        { insert: "Main" },
+        { insert: "\n", attributes: { header: 2 } },
+        { insert: "Body text\nSub" },
+        { insert: "\n", attributes: { header: 3 } },
+        { insert: "More\n" },
+      ]),
+    ).toBe("<h2>Main</h2><p>Body text</p><h3>Sub</h3><p>More</p>");
+  });
+
+  it("renders sizes and fonts as classes, and alignment on the line", () => {
+    expect(
+      render([
+        { insert: "Big", attributes: { size: "huge", font: "courier-new", underline: true } },
+        { insert: " and " },
+        { insert: "gone", attributes: { strike: true, link: "/about" } },
+        { insert: "\n", attributes: { align: "right" } },
+        { insert: "Item" },
+        { insert: "\n", attributes: { list: "bullet", align: "center" } },
+        { insert: "Title" },
+        { insert: "\n", attributes: { header: 2, align: "justify" } },
+      ]),
+    ).toBe(
+      '<p class="rt-align-right"><span class="rt-size-huge rt-font-courier-new"><u>Big</u></span> and ' +
+        '<a href="/about"><s>gone</s></a></p>' +
+        '<ul><li class="rt-align-center">Item</li></ul><h2 class="rt-align-justify">Title</h2>',
+    );
+  });
+
+  it("continues numbering across bullet items, like the editor", () => {
+    const item = (text: string, list: string) => [{ insert: text }, { insert: "\n", attributes: { list } }];
+    expect(
+      render([
+        ...item("One", "ordered"),
+        ...item("Two", "ordered"),
+        ...item("Note", "bullet"),
+        ...item("Three", "ordered"),
+        { insert: "Break\n" },
+        ...item("Again one", "ordered"),
+      ]),
+    ).toBe(
+      "<ol><li>One</li><li>Two</li></ol><ul><li>Note</li></ul><ol start=\"3\"><li>Three</li></ol>" +
+        "<p>Break</p><ol><li>Again one</li></ol>",
+    );
+  });
+
+  it("renders an empty heading line as a blank line", () => {
+    expect(render([{ insert: "A\n" }, { insert: "\n", attributes: { header: 2 } }, { insert: "B\n" }])).toBe(
+      "<p>A</p><p><br></p><p>B</p>",
+    );
+  });
+
+
   it("renders paragraphs with inline formats", () => {
     expect(
       render([

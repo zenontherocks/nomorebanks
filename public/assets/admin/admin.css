@@ -395,10 +395,6 @@ a:focus-visible {
   border-radius: var(--radius);
 }
 
-.module-subheading {
-  border-left-color: #6b8be0;
-}
-
 .module-text {
   border-left-color: #8a94a6;
 }
@@ -427,16 +423,6 @@ a:focus-visible {
   padding: 0.75rem;
 }
 
-.heading-input-heading {
-  font-size: 1.4rem;
-  font-weight: 700;
-}
-
-.heading-input-subheading {
-  font-size: 1.15rem;
-  font-weight: 600;
-}
-
 .text-editor {
   min-height: 7rem;
   font-size: 1rem;
@@ -449,6 +435,108 @@ a:focus-visible {
 .ql-container.ql-snow {
   border-radius: 0 0 6px 6px;
   font: inherit;
+}
+
+/* Editor text matches the public site (sizes, fonts and headings in site.css). */
+.ql-snow .ql-editor h2 {
+  font-size: 1.65em;
+  line-height: 1.25;
+}
+
+.ql-snow .ql-editor h3 {
+  font-size: 1.25em;
+  line-height: 1.3;
+}
+
+.ql-editor .ql-size-small {
+  font-size: 0.8em;
+}
+
+.ql-editor .ql-size-large {
+  font-size: 1.4em;
+}
+
+.ql-editor .ql-size-huge {
+  font-size: 2em;
+}
+
+.ql-font-arial {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.ql-font-georgia {
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.ql-font-times-new-roman {
+  font-family: "Times New Roman", Times, serif;
+}
+
+.ql-font-verdana {
+  font-family: Verdana, Geneva, sans-serif;
+}
+
+.ql-font-courier-new {
+  font-family: "Courier New", Courier, monospace;
+}
+
+/* Toolbar menus: plain-language labels, each font shown in its own typeface. */
+.ql-snow .ql-picker.ql-header {
+  width: 128px;
+}
+
+.ql-snow .ql-picker.ql-font {
+  width: 148px;
+}
+
+.ql-snow .ql-picker.ql-header .ql-picker-label::before,
+.ql-snow .ql-picker.ql-header .ql-picker-item::before {
+  content: "Normal text";
+}
+
+.ql-snow .ql-picker.ql-header .ql-picker-label[data-value="2"]::before,
+.ql-snow .ql-picker.ql-header .ql-picker-item[data-value="2"]::before {
+  content: "Main heading";
+}
+
+.ql-snow .ql-picker.ql-header .ql-picker-label[data-value="3"]::before,
+.ql-snow .ql-picker.ql-header .ql-picker-item[data-value="3"]::before {
+  content: "Subheading";
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item::before {
+  content: "Default font";
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="arial"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="arial"]::before {
+  content: "Arial";
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="georgia"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="georgia"]::before {
+  content: "Georgia";
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="times-new-roman"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="times-new-roman"]::before {
+  content: "Times New Roman";
+  font-family: "Times New Roman", Times, serif;
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="verdana"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="verdana"]::before {
+  content: "Verdana";
+  font-family: Verdana, Geneva, sans-serif;
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="courier-new"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="courier-new"]::before {
+  content: "Courier New";
+  font-family: "Courier New", Courier, monospace;
 }
 
 .image-module {
