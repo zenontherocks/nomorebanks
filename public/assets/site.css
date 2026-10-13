@@ -221,12 +221,22 @@ a {
   outline-offset: 2px;
 }
 
+/* Tiles redefine --accent for their preview, so their focus ring uses the page's accent instead. */
+.theme-option:focus-visible {
+  outline-color: var(--page-accent);
+}
+
 .theme-menu {
+  --page-accent: var(--accent);
   position: absolute;
   top: calc(100% + 0.5rem);
   right: 0;
   z-index: 20;
   width: min(21rem, calc(100vw - 2rem));
+  /* The header is sticky, so on short screens the grid scrolls inside itself. */
+  max-height: calc(100dvh - 7rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.9rem;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -315,6 +325,25 @@ a {
 
 .theme-name {
   white-space: nowrap;
+}
+
+/* Print dark-on-white whatever the theme, and leave the picker out. */
+@media print {
+  html[data-theme] {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --text: #1f2430;
+    --heading: #1f2430;
+    --muted: #5b6475;
+    --accent: #2456d6;
+    --accent-soft: #edf2fd;
+    --border: #e3e6ec;
+    color-scheme: light;
+  }
+
+  .theme-picker {
+    display: none;
+  }
 }
 
 @media (max-width: 520px) {

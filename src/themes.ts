@@ -22,7 +22,7 @@ export const THEMES = [
 export type ThemeId = (typeof THEMES)[number]["id"];
 
 /** The theme visitors see until they pick one themselves. */
-export const DEFAULT_THEME: ThemeId = "classic";
+export const DEFAULT_THEME: ThemeId = "charcoal";
 
 export const THEME_COOKIE = "nmb_theme";
 const THEME_COOKIE_MAX_AGE = 365 * 24 * 60 * 60;

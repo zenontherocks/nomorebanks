@@ -14,9 +14,9 @@ and R2 for uploaded images.
 - Each page shows its *page title*, then its modules from top to bottom.
 - A **Theme** button on the right of the navbar pops out a 3×3 grid of color themes (Classic,
   Ocean, Forest, Sand, Lavender, Rose, Midnight, Charcoal, Dusk). A visitor's choice is saved
-  in a small cookie (`nmb_theme`, the theme name only) and works without JavaScript too. The
-  default for new visitors is `DEFAULT_THEME` in `src/themes.ts`; the colors are in
-  `public/assets/site.css` and all meet WCAG AA contrast.
+  in a small cookie (`nmb_theme`, the theme name only) and works without JavaScript too. New
+  visitors get Charcoal: change `DEFAULT_THEME` in `src/themes.ts` to switch the default. The
+  colors are in `public/assets/site.css` and all meet WCAG AA contrast.
 
 **Modules**
 

@@ -2,6 +2,7 @@ import { createExecutionContext, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { cleanupOrphanImages } from "../src/images";
 import app from "../src/index";
+import { DEFAULT_THEME } from "../src/themes";
 import { ORIGIN, PNG_BYTES, api, fetchWorker, freshIp, headingDelta, login, postLogin, textDelta } from "./helpers";
 
 /** Calls the app directly, so concurrent requests really overlap (the loopback fetch serializes them). */
@@ -332,9 +333,10 @@ describe("color themes", () => {
 
   it("renders the default theme and a picker with nine options", async () => {
     const html = await (await fetchWorker("/")).text();
-    expect(themeOf(html)).toBe("classic");
+    expect(DEFAULT_THEME).toBe("charcoal");
+    expect(themeOf(html)).toBe(DEFAULT_THEME);
     expect(html.match(/class="theme-option"/g)).toHaveLength(9);
-    expect(pressed(html)).toEqual(["classic"]);
+    expect(pressed(html)).toEqual([DEFAULT_THEME]);
     expect(html).toContain('<script src="/assets/site.js" defer');
     expect(html).toContain("Your choice is saved in a cookie on this device.");
   });
@@ -346,7 +348,7 @@ describe("color themes", () => {
 
     const bogus = await fetchWorker("/no-such-page", { headers: { cookie: 'nmb_theme="><script>alert(1)</script>' } });
     const html = await bogus.text();
-    expect(themeOf(html)).toBe("classic");
+    expect(themeOf(html)).toBe(DEFAULT_THEME);
     expect(html).not.toContain("<script>alert");
   });
 

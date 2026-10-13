@@ -6,6 +6,25 @@ const picker = document.querySelector(".theme-picker");
 if (picker) {
   const summary = picker.querySelector("summary");
   const form = picker.querySelector("form");
+  const options = [...form.querySelectorAll('button[name="theme"]')];
+
+  const applyTheme = (theme) => {
+    document.documentElement.dataset.theme = theme;
+    for (const option of options) option.setAttribute("aria-pressed", String(option.value === theme));
+  };
+
+  // Pages brought back by Back/Forward (from the cache) were drawn with the theme
+  // chosen at the time; switch them to the one saved since.
+  const syncFromCookie = () => {
+    const saved = document.cookie.match(/(?:^|; )nmb_theme=([a-z-]+)/)?.[1];
+    if (saved && saved !== document.documentElement.dataset.theme && options.some((o) => o.value === saved)) {
+      applyTheme(saved);
+    }
+  };
+  syncFromCookie();
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) syncFromCookie();
+  });
 
   const close = ({ refocus }) => {
     picker.open = false;
@@ -17,13 +36,9 @@ if (picker) {
     if (!option || option.name !== "theme") return; // older browsers: let the form post
     event.preventDefault();
 
-    const theme = option.value;
-    document.documentElement.dataset.theme = theme;
+    applyTheme(option.value);
     const secure = location.protocol === "https:" ? "; Secure" : "";
-    document.cookie = `nmb_theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
-    for (const button of form.querySelectorAll('button[name="theme"]')) {
-      button.setAttribute("aria-pressed", String(button === option));
-    }
+    document.cookie = `nmb_theme=${option.value}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
     close({ refocus: true });
   });
 
@@ -33,5 +48,11 @@ if (picker) {
 
   document.addEventListener("click", (event) => {
     if (picker.open && !picker.contains(event.target)) close({ refocus: false });
+  });
+
+  // Tabbing out of the grid closes it, so it never covers the newly focused element.
+  // (relatedTarget is null when clicking blank space inside the grid; keep it open then.)
+  picker.addEventListener("focusout", (event) => {
+    if (picker.open && event.relatedTarget && !picker.contains(event.relatedTarget)) close({ refocus: false });
   });
 }

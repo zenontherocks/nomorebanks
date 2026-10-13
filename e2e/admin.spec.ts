@@ -246,15 +246,34 @@ test("toolbar controls are labelled and pasted headings fold to the site's two l
 });
 
 test("visitors pick a color theme from a 3×3 grid in the navbar", async ({ page, browser }) => {
+  // Create two pages to navigate between, so this test doesn't depend on the others.
+  await page.goto("/admin");
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Log in" }).click();
+  await expect(page.getByRole("heading", { name: "Pages" })).toBeVisible();
+  for (const name of ["Theme A", "Theme B"]) {
+    const status = await page.evaluate(async (name) => {
+      const res = await fetch("/api/pages", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-requested-with": "nmb-admin" },
+        body: JSON.stringify({ page_title: name, nav_title: name, modules: [] }),
+      });
+      return res.status;
+    }, name);
+    expect(status).toBe(201);
+  }
+
   await page.goto("/");
   const picker = page.locator(".theme-picker");
   const options = picker.locator(".theme-option");
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
+  // New visitors get the default theme (Charcoal), shown as the selected option.
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "charcoal");
   await expect(options.first()).toBeHidden();
 
   // Clicking the button pops out the grid: 9 options in 3 columns and 3 rows.
   await picker.locator("summary").click();
   await expect(options).toHaveCount(9);
+  await expect(options.filter({ hasText: "Charcoal" })).toHaveAttribute("aria-pressed", "true");
   const boxes = await options.evaluateAll((els) => els.map((el) => el.getBoundingClientRect()));
   expect(new Set(boxes.map((b) => Math.round(b.left))).size).toBe(3);
   expect(new Set(boxes.map((b) => Math.round(b.top))).size).toBe(3);
@@ -275,10 +294,44 @@ test("visitors pick a color theme from a 3×3 grid in the navbar", async ({ page
   // Escape and clicking elsewhere close the grid without changing the theme.
   await page.keyboard.press("Escape");
   await expect(options.first()).toBeHidden();
+  await expect(picker.locator("summary")).toBeFocused();
   await picker.locator("summary").click();
   await page.locator("main").click();
   await expect(options.first()).toBeHidden();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "midnight");
+
+  // Tabbing out of the grid to another control on the page closes it, so it doesn't cover that control.
+  await picker.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(options.first()).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(options.first()).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.locator(".site-nav a").last()).toBeFocused();
+  await expect(options.first()).toBeHidden();
+
+  // A page reached with Back shows the theme picked since, not the one it was drawn with.
+  await page.goto("/");
+  await page.locator(".site-nav a", { hasText: "Theme B" }).click();
+  await expect(page).toHaveURL(/\/theme-b$/);
+  await picker.locator("summary").click();
+  await options.filter({ hasText: "Ocean" }).click();
+  await page.goBack();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "ocean");
+  await picker.locator("summary").click();
+  await expect(options.filter({ hasText: "Ocean" })).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Escape");
+
+  // On a short screen (a phone held sideways) the grid scrolls, so the dark themes are reachable.
+  await page.setViewportSize({ width: 667, height: 300 });
+  await picker.locator("summary").click();
+  const dusk = options.filter({ hasText: "Dusk" });
+  await dusk.scrollIntoViewIfNeeded();
+  await expect(dusk).toBeInViewport({ ratio: 1 });
+  await dusk.click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dusk");
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   // It also works with JavaScript turned off (the form posts and the page reloads).
   const noJs = await browser.newContext({ javaScriptEnabled: false });
