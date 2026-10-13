@@ -2,6 +2,7 @@ import { createExecutionContext, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { cleanupOrphanImages } from "../src/images";
 import app from "../src/index";
+import { DEFAULT_THEME } from "../src/themes";
 import { ORIGIN, PNG_BYTES, api, fetchWorker, freshIp, headingDelta, login, postLogin, textDelta } from "./helpers";
 
 /** Calls the app directly, so concurrent requests really overlap (the loopback fetch serializes them). */
@@ -323,5 +324,69 @@ describe("images", () => {
     await cleanupOrphanImages(env, Date.now() + 2 * 24 * 60 * 60 * 1000);
     expect(await env.IMAGES.head(unused)).toBeNull();
     expect(await env.IMAGES.head(used)).not.toBeNull();
+  });
+});
+
+describe("color themes", () => {
+  const themeOf = (html: string) => html.match(/<html lang="en" data-theme="([^"]+)"/)?.[1];
+  const pressed = (html: string) => [...html.matchAll(/value="([a-z]+)"[^>]*aria-pressed="true"/g)].map((m) => m[1]);
+
+  it("renders the default theme and a picker with nine options", async () => {
+    const html = await (await fetchWorker("/")).text();
+    expect(DEFAULT_THEME).toBe("charcoal");
+    expect(themeOf(html)).toBe(DEFAULT_THEME);
+    expect(html.match(/class="theme-option"/g)).toHaveLength(9);
+    expect(pressed(html)).toEqual([DEFAULT_THEME]);
+    expect(html).toContain('<script src="/assets/site.js" defer');
+    expect(html).toContain("Your choice is saved in a cookie on this device.");
+  });
+
+  it("renders the visitor's chosen theme from the cookie, ignoring unknown values", async () => {
+    const chosen = await (await fetchWorker("/", { headers: { cookie: "nmb_theme=midnight" } })).text();
+    expect(themeOf(chosen)).toBe("midnight");
+    expect(pressed(chosen)).toEqual(["midnight"]);
+
+    const bogus = await fetchWorker("/no-such-page", { headers: { cookie: 'nmb_theme="><script>alert(1)</script>' } });
+    const html = await bogus.text();
+    expect(themeOf(html)).toBe(DEFAULT_THEME);
+    expect(html).not.toContain("<script>alert");
+  });
+
+  it("remembers a theme picked without JavaScript and returns to the same page", async () => {
+    const res = await fetchWorker("/theme", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", origin: ORIGIN },
+      body: new URLSearchParams({ theme: "ocean", return: "/about" }),
+    });
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("/about");
+    const cookie = res.headers.get("set-cookie") ?? "";
+    expect(cookie).toMatch(/^nmb_theme=ocean;/);
+    expect(cookie).toContain("SameSite=Lax");
+    expect(cookie).not.toContain("HttpOnly");
+  });
+
+  it("ignores unknown themes and never redirects off the site", async () => {
+    const post = (body: Record<string, string>) =>
+      fetchWorker("/theme", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded", origin: ORIGIN },
+        body: new URLSearchParams(body),
+      });
+
+    const unknown = await post({ theme: "neon", return: "/" });
+    expect(unknown.status).toBe(303);
+    expect(unknown.headers.get("set-cookie")).toBeNull();
+
+    for (const target of ["//evil.example", "/\\evil.example", "https://evil.example/", "javascript:alert(1)", "/a b"]) {
+      expect((await post({ theme: "rose", return: target })).headers.get("location")).toBe("/");
+    }
+
+    const crossSite = await fetchWorker("/theme", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://evil.example" },
+      body: new URLSearchParams({ theme: "rose", return: "/" }),
+    });
+    expect(crossSite.status).toBe(403);
   });
 });

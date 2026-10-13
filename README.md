@@ -12,6 +12,11 @@ and R2 for uploaded images.
 - A top navbar links every page by its *navbar title*, in the order set in the admin console.
 - The first page in that order is the home page (`/`); the others live at `/<slug>`.
 - Each page shows its *page title*, then its modules from top to bottom.
+- A **Theme** button on the right of the navbar pops out a 3×3 grid of color themes (Classic,
+  Ocean, Forest, Sand, Lavender, Rose, Midnight, Charcoal, Dusk). A visitor's choice is saved
+  in a small cookie (`nmb_theme`, the theme name only) and works without JavaScript too. New
+  visitors get Charcoal: change `DEFAULT_THEME` in `src/themes.ts` to switch the default. The
+  colors are in `public/assets/site.css` and all meet WCAG AA contrast.
 
 **Modules**
 
@@ -43,11 +48,13 @@ src/
   validate.ts        Validates page saves from the admin console
   richtext.ts        Renders text modules (stored as Quill Deltas) to safe HTML
   images.ts          Image upload checks, R2 storage, cleanup of unused images
-  routes/public.tsx  Public pages and /media/<image>
+  themes.ts          Color theme list, default theme and the theme cookie
+  routes/public.tsx  Public pages, /media/<image> and the no-JavaScript /theme form
   routes/admin.tsx   /admin login/logout and the console shell
   routes/api.ts      JSON API used by the console (/api/pages, /api/uploads)
   views/             Server-rendered HTML (Hono JSX)
-public/assets/       CSS, the admin console script, and vendored Quill + SortableJS
+public/assets/       CSS, the theme picker script, the admin console script, and vendored
+                     Quill + SortableJS
 ```
 
 - **Security:** the admin password is a Worker secret, compared in constant time. Sessions

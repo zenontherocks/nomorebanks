@@ -10,7 +10,7 @@ import { apiRoutes } from "./routes/api";
 import { notFoundPage, publicRoutes } from "./routes/public";
 import { ensureSchema } from "./schema";
 import { ValidationError } from "./validate";
-import { MessageView, SiteLayout } from "./views/site";
+import { MessageView, SiteLayout, siteContext } from "./views/site";
 
 const app = new Hono<AppEnv>({ strict: false });
 
@@ -58,7 +58,7 @@ app.onError((err, c) => {
   if (isApi) return c.json({ error: "Something went wrong on the server. Please try again." }, 500);
   return renderHtml(
     c,
-    <SiteLayout title="Something went wrong" nav={[]}>
+    <SiteLayout title="Something went wrong" nav={[]} {...siteContext(c)}>
       <MessageView title="Something went wrong" message="Please try again in a moment." />
     </SiteLayout>,
     500,
