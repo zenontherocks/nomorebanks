@@ -244,3 +244,48 @@ test("toolbar controls are labelled and pasted headings fold to the site's two l
   await expect(card.locator(".ql-editor h3")).toHaveText("Small title");
   await expect(card.locator(".ql-editor h1, .ql-editor h4")).toHaveCount(0);
 });
+
+test("visitors pick a color theme from a 3×3 grid in the navbar", async ({ page, browser }) => {
+  await page.goto("/");
+  const picker = page.locator(".theme-picker");
+  const options = picker.locator(".theme-option");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
+  await expect(options.first()).toBeHidden();
+
+  // Clicking the button pops out the grid: 9 options in 3 columns and 3 rows.
+  await picker.locator("summary").click();
+  await expect(options).toHaveCount(9);
+  const boxes = await options.evaluateAll((els) => els.map((el) => el.getBoundingClientRect()));
+  expect(new Set(boxes.map((b) => Math.round(b.left))).size).toBe(3);
+  expect(new Set(boxes.map((b) => Math.round(b.top))).size).toBe(3);
+  await page.screenshot({ path: "test-results/theme-picker.png" });
+
+  // Choosing a theme applies it right away and closes the grid.
+  await options.filter({ hasText: "Midnight" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "midnight");
+  await expect(options.first()).toBeHidden();
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(15, 23, 42)");
+
+  // The choice is remembered on the next visit.
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "midnight");
+  await picker.locator("summary").click();
+  await expect(options.filter({ hasText: "Midnight" })).toHaveAttribute("aria-pressed", "true");
+
+  // Escape and clicking elsewhere close the grid without changing the theme.
+  await page.keyboard.press("Escape");
+  await expect(options.first()).toBeHidden();
+  await picker.locator("summary").click();
+  await page.locator("main").click();
+  await expect(options.first()).toBeHidden();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "midnight");
+
+  // It also works with JavaScript turned off (the form posts and the page reloads).
+  const noJs = await browser.newContext({ javaScriptEnabled: false });
+  const plain = await noJs.newPage();
+  await plain.goto(new URL("/", page.url()).href);
+  await plain.locator(".theme-picker summary").click();
+  await plain.locator(".theme-option", { hasText: "Sand" }).click();
+  await expect(plain.locator("html")).toHaveAttribute("data-theme", "sand");
+  await noJs.close();
+});
